@@ -1,0 +1,500 @@
+# MASTER APP GENERATION PROMPT
+
+Build a production-ready Android application called "CitizenOS" using Kotlin, Android Studio, Firebase, Material Design 3, MVVM Architecture, Repository Pattern, Jetpack Navigation, Coroutines, StateFlow, ViewModel, Hilt Dependency Injection, Firebase Authentication, Firestore Database, Firebase Storage, Firebase Cloud Messaging, Google Maps SDK, Gemini AI Integration, Room Database for offline caching, and Clean Architecture principles.
+
+The application should be designed as a next-generation AI-powered Smart Municipality and Digital Governance Super App that digitizes every interaction between citizens and local government.
+
+The design must feel like a premium government platform similar to modern fintech applications, with beautiful animations, smooth transitions, dark mode, accessibility support, multilingual support, and a highly professional user experience.
+
+---
+
+MISSION
+
+Create a platform that:
+
+* Eliminates paper-based government processes.
+* Increases transparency.
+* Reduces corruption.
+* Improves citizen participation.
+* Accelerates public service delivery.
+* Makes local government accessible from mobile devices.
+* Provides real-time communication between citizens and authorities.
+* Uses AI to simplify governance.
+
+---
+
+USER ROLES
+
+1. Citizen
+2. Municipal Employee
+3. Department Officer
+4. Ward Officer
+5. Emergency Operator
+6. Administrator
+7. Mayor / Representative
+
+Implement complete role-based access control.
+
+---
+
+AUTHENTICATION
+
+Implement:
+
+* Mobile OTP Login
+* Email Login
+* Google Sign-In
+* Forgot Password
+* Session Persistence
+
+Store users in Firestore.
+
+User profile includes:
+
+* Name
+* Mobile Number
+* Email
+* Address
+* Ward
+* Citizen ID
+* Profile Photo
+* Role
+
+---
+
+DASHBOARD
+
+Create a modern dashboard with:
+
+* Welcome Header
+* Profile Completion Status
+* Emergency SOS Button
+* Active Complaints
+* New Notices
+* Municipality Updates
+* Ongoing Projects
+* Upcoming Events
+* Polls
+* AI Assistant Shortcut
+* Quick Services Grid
+
+Use cards, charts, and modern UI.
+
+---
+
+AI GOVERNANCE ASSISTANT
+
+Integrate Gemini AI.
+
+Capabilities:
+
+* Explain municipal services.
+* Explain taxes.
+* Explain government schemes.
+* Explain budgets in simple language.
+* Answer citizen questions.
+* Provide service guidance.
+* Help complete forms.
+* Translate notices.
+* Summarize long government documents.
+* Voice conversation support.
+
+Example:
+
+Citizen asks:
+
+"How do I apply for a residence certificate?"
+
+AI provides:
+
+* Requirements
+* Fees
+* Timeline
+* Direct application button
+
+---
+
+SMART COMPLAINT MANAGEMENT
+
+Allow citizens to:
+
+* Upload photos
+* Upload videos
+* Record voice reports
+* Add GPS location
+* Select category
+* Add detailed description
+
+Categories:
+
+* Roads
+* Water Supply
+* Garbage
+* Drainage
+* Electricity
+* Public Safety
+* Parks
+* Government Service Complaints
+
+AI automatically:
+
+* Categorizes issue
+* Detects urgency
+* Assigns department
+* Estimates resolution priority
+
+Complaint workflow:
+
+Submitted
+Assigned
+Under Review
+In Progress
+Resolved
+Closed
+
+Citizen receives push notifications for every status change.
+
+---
+
+EMERGENCY RESPONSE SYSTEM
+
+Create one-touch emergency reporting.
+
+Emergency types:
+
+* Fire
+* Ambulance
+* Flood
+* Landslide
+* Earthquake
+* Water Leakage
+* Road Accident
+* Crime Report
+
+Automatically attach:
+
+* GPS coordinates
+* User information
+* Timestamp
+
+Emergency dashboard for operators.
+
+---
+
+PUBLIC PROJECT TRANSPARENCY
+
+Display:
+
+* Project Name
+* Budget
+* Contractor
+* Progress Percentage
+* Start Date
+* End Date
+* Photos
+* Timeline
+
+Interactive map showing all development projects.
+
+Citizens can monitor government spending.
+
+---
+
+SMART CITY MAP
+
+Google Maps integration.
+
+Display:
+
+* Municipal Offices
+* Hospitals
+* Schools
+* Police Stations
+* Fire Stations
+* Tourist Places
+* Public Toilets
+* Water Sources
+* Development Projects
+
+Allow route navigation.
+
+---
+
+DIGITAL CITIZEN CHARTER
+
+Provide complete service information.
+
+Each service includes:
+
+* Required documents
+* Fees
+* Processing time
+* Responsible office
+* Contact details
+
+Searchable directory.
+
+---
+
+DIGITAL CERTIFICATES
+
+Support:
+
+* Birth Certificate
+* Death Certificate
+* Residence Certificate
+* Character Certificate
+* Income Certificate
+
+Features:
+
+* Online application
+* Status tracking
+* PDF download
+* QR verification
+
+---
+
+PUBLIC NOTICE CENTER
+
+Publish:
+
+* Notices
+* News
+* Tenders
+* Recruitment
+* Events
+* Emergency Alerts
+
+Features:
+
+* PDF viewer
+* Download
+* Bookmark
+* Share
+
+AI summary generation.
+
+---
+
+COMMUNITY POLLS
+
+Allow government to create polls.
+
+Examples:
+
+* New Park Location
+* Road Development Priority
+* Community Projects
+
+Real-time voting analytics.
+
+---
+
+CITIZEN IDEAS PORTAL
+
+Citizens submit:
+
+* Suggestions
+* Development Plans
+* Innovation Ideas
+
+Community voting system.
+
+Top ideas displayed publicly.
+
+---
+
+COMMUNITY FORUM
+
+Create local discussion platform.
+
+Features:
+
+* Categories
+* Posts
+* Comments
+* Moderation
+* Upvotes
+
+---
+
+HEALTH HUB
+
+Provide:
+
+* Hospitals
+* Clinics
+* Health Posts
+* Ambulance Contacts
+* Vaccination Campaigns
+* Medical Camps
+
+Emergency health support.
+
+---
+
+EDUCATION HUB
+
+Provide:
+
+* Schools
+* Scholarships
+* Training Programs
+* Learning Resources
+
+---
+
+AGRICULTURE HUB
+
+Provide:
+
+* Crop Advisory
+* Weather Information
+* Market Prices
+* Subsidy Programs
+* Farmer Registration
+
+---
+
+TOURISM HUB
+
+Show:
+
+* Tourist Attractions
+* Religious Sites
+* Historical Locations
+
+Include:
+
+* Images
+* Descriptions
+* Maps
+* Navigation
+
+---
+
+PAYMENTS MODULE
+
+Future-ready architecture.
+
+Support:
+
+* Property Tax
+* Water Bills
+* Service Charges
+
+Digital receipts.
+
+---
+
+GAMIFICATION
+
+Citizen Score System.
+
+Earn points for:
+
+* Reporting issues
+* Voting
+* Community participation
+* Completing surveys
+
+Badges:
+
+* Active Citizen
+* Community Leader
+* Smart Citizen
+* Municipality Champion
+
+---
+
+MULTILINGUAL SUPPORT
+
+Support:
+
+* English
+* Hindi
+* Marathi
+* Nepali
+
+Runtime language switching.
+
+---
+
+OFFLINE MODE
+
+Use Room Database.
+
+Cache:
+
+* Notices
+* Projects
+* Services
+* Profile
+
+App should function with poor internet connectivity.
+
+---
+
+ANALYTICS DASHBOARD
+
+For administrators:
+
+* Active Users
+* Complaint Statistics
+* Resolution Time
+* Department Performance
+* Emergency Response Metrics
+* Citizen Engagement Metrics
+
+Interactive charts.
+
+---
+
+SECURITY
+
+Implement:
+
+* Firestore Rules
+* Role-Based Access Control
+* Secure Storage
+* Encrypted Preferences
+* Audit Logs
+
+---
+
+ACCESSIBILITY
+
+Support:
+
+* Large Text
+* Voice Navigation
+* Screen Readers
+* High Contrast Mode
+
+---
+
+DESIGN REQUIREMENTS
+
+Use Material Design 3.
+
+Design style:
+
+* Modern
+* Premium
+* Government-grade
+* Fintech-quality UI
+
+Include:
+
+* Animations
+* Lottie illustrations
+* Shimmer loading
+* Smooth transitions
+* Responsive layouts
+
+The final product should feel like a combination of:
+Google Maps + WhatsApp + MyGov + Municipal Services + AI Assistant + Smart City Dashboard inside a single super app.
+
+Primary goal:
+Create the most advanced, scalable, transparent, citizen-centric digital governance platform capable of serving millions of users and becoming the operating system for smart municipalities and smart cities.
