@@ -1,0 +1,6 @@
+{
+  "name": "CivicTrack",
+  "description": "AI-Powered Smart Municipality & Carbon Tracking Platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
