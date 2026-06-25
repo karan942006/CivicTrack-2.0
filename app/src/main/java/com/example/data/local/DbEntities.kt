@@ -16,7 +16,16 @@ data class Complaint(
     val timestamp: Long = System.currentTimeMillis(),
     val imageBase64: String? = null,
     val rating: Int = 0, // 0 means unrated, 1-5 for stars
-    val feedbackText: String? = null
+    val feedbackText: String? = null,
+    val ratingComment: String? = null,   // citizen's text comment on the rating
+    val resolvedImageBase64: String? = null,
+    val resolutionNote: String? = null,  // worker's written resolution summary
+    val workerName: String? = null,
+    val workerInfo: String? = null,
+    val isTipped: Boolean = false,
+    val tipAmount: Double = 0.0,
+    val governmentPayout: Double = 0.0,
+    val payoutStatus: String? = null
 )
 
 @Entity(tableName = "notices")

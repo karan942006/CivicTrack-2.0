@@ -199,7 +199,7 @@ class CivicRepository(context: Context) {
     }
 
     // AI Complaint Categorization
-    suspend fun insertComplaint(title: String, description: String, imageBase64: String?, categoryOverride: String? = null): Complaint {
+    suspend fun insertComplaint(title: String, description: String, imageBase64: String?, categoryOverride: String? = null, location: String? = null): Complaint {
         return withContext(Dispatchers.IO) {
             var category = categoryOverride ?: "General"
             var urgency = "Medium"
@@ -306,7 +306,7 @@ class CivicRepository(context: Context) {
                 status = "Submitted",
                 urgency = urgency,
                 department = department,
-                location = "Ward 4, Smart Sector A",
+                location = location ?: "Ward 4, Smart Sector A",
                 imageBase64 = imageBase64
             )
             complaintDao.insertComplaint(complaint)

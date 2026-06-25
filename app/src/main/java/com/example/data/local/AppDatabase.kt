@@ -83,7 +83,7 @@ interface AppConfigDao {
 
 @Database(
     entities = [Complaint::class, Notice::class, Project::class, Poll::class, CarbonMetric::class, AppConfig::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -93,4 +93,19 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pollDao(): PollDao
     abstract fun carbonMetricDao(): CarbonMetricDao
     abstract fun appConfigDao(): AppConfigDao
+
+    companion object {
+        @Volatile private var INSTANCE: AppDatabase? = null
+        fun getInstance(context: android.content.Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                androidx.room.Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "civictrack_db"
+                )
+                .fallbackToDestructiveMigration()
+                .build().also { INSTANCE = it }
+            }
+        }
+    }
 }

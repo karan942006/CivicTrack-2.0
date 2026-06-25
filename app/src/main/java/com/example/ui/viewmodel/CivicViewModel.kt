@@ -245,7 +245,7 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun submitComplaint(title: String, description: String, imageBase64: String?, categoryOverride: String? = null) {
+    fun submitComplaint(title: String, description: String, imageBase64: String?, categoryOverride: String? = null, location: String? = null) {
         if (title.isBlank() || description.isBlank()) {
             _submitState.value = SubmitState.Error("Title and description are required.")
             return
@@ -254,7 +254,7 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
         _submitState.value = SubmitState.Submitting
         viewModelScope.launch {
             try {
-                val inserted = repository.insertComplaint(title, description, imageBase64, categoryOverride)
+                val inserted = repository.insertComplaint(title, description, imageBase64, categoryOverride, location)
                 _submitState.value = SubmitState.Success
                 
                 // Award points & unlock achievement for lodging a complaint
@@ -362,4 +362,168 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun awardWorkerPoints(points: Int) {
+        viewModelScope.launch {
+            val nextPoints = _workerPoints.value + points
+            _workerPoints.value = nextPoints
+            repository.saveConfig("worker_points", nextPoints.toString())
+        }
+    }
+
+    fun unlockWorkerAchievement(id: String) {
+        if (_earnedWorkerAchievements.value.contains(id)) return
+        viewModelScope.launch {
+            val updated = _earnedWorkerAchievements.value + id
+            _earnedWorkerAchievements.value = updated
+            repository.saveConfig("earned_worker_achievements", updated.joinToString(","))
+            
+            val ach = workerAchievementsList.find { it.id == id }
+            if (ach != null) {
+                awardWorkerPoints(ach.points)
+                triggerRealTimeAlert(CivicAlert(
+                    title = "🏆 Worker Achievement: ${ach.title}!",
+                    message = "Awesome work! You earned the '${ach.title}' badge and +${ach.points} Worker XP!",
+                    urgency = "Low",
+                    isEmergency = false
+                ))
+            }
+        }
+    }
+
+    fun assignWorker(complaintId: Int, workerName: String, workerInfo: String) {
+        viewModelScope.launch {
+            val currentComplaints = complaints.value
+            val complaint = currentComplaints.find { it.id == complaintId } ?: return@launch
+            val updated = complaint.copy(
+                status = "In Progress",
+                workerName = workerName,
+                workerInfo = workerInfo
+            )
+            repository.updateComplaint(updated)
+            triggerRealTimeAlert(CivicAlert(
+                title = "🔧 Worker Assigned to Grievance",
+                message = "Worker $workerName has accepted your complaint ID #${complaint.id} and started work.",
+                urgency = "Medium",
+                isEmergency = false
+            ))
+        }
+    }
+
+    fun resolveComplaint(complaintId: Int, resolvedImage: String, payout: Double) {
+        viewModelScope.launch {
+            val currentComplaints = complaints.value
+            val complaint = currentComplaints.find { it.id == complaintId } ?: return@launch
+            val updated = complaint.copy(
+                status = "Resolved",
+                resolvedImageBase64 = resolvedImage,
+                governmentPayout = payout,
+                payoutStatus = "Paid"
+            )
+            repository.updateComplaint(updated)
+            
+            awardWorkerPoints(120) // Resolution points
+            unlockWorkerAchievement("first_mission")
+            if (_workerPoints.value > 250) {
+                unlockWorkerAchievement("work_veteran")
+            }
+            
+            triggerRealTimeAlert(CivicAlert(
+                title = "✅ Grievance Resolved by Worker",
+                message = "Grievance ID #${complaint.id} ('${complaint.title}') has been marked as Resolved by worker.",
+                urgency = "Low",
+                isEmergency = false
+            ))
+        }
+    }
+
+    fun rateAndTipWorker(complaintId: Int, rating: Int, feedback: String?, tip: Double) {
+        viewModelScope.launch {
+            val currentComplaints = complaints.value
+            val complaint = currentComplaints.find { it.id == complaintId } ?: return@launch
+            val updated = complaint.copy(
+                rating = rating,
+                feedbackText = feedback,
+                ratingComment = feedback,
+                isTipped = tip > 0.0,
+                tipAmount = tip
+            )
+            repository.updateComplaint(updated)
+
+            unlockAchievement("five_star_grader")
+
+            if (complaint.workerName != null) {
+                awardWorkerPoints((rating * 20) + (tip * 10).toInt())
+                if (rating == 5) {
+                    unlockWorkerAchievement("gold_service")
+                }
+            }
+
+            triggerRealTimeAlert(CivicAlert(
+                title = "⭐ Feedback & Tip Submitted",
+                message = "Thank you for rating. Worker received ${rating}★ and a tip of ₹${tip} successfully.",
+                urgency = "Low",
+                isEmergency = false
+            ))
+        }
+    }
+
+    /** Convenience: Worker marks complaint as resolved with a note and optional photo */
+    fun resolveComplaint(complaintId: Int, note: String, photoUri: String? = null) {
+        viewModelScope.launch {
+            val currentComplaints = complaints.value
+            val complaint = currentComplaints.find { it.id == complaintId } ?: return@launch
+            val updated = complaint.copy(
+                status = "Resolved",
+                resolutionNote = note,
+                resolvedImageBase64 = photoUri,
+                governmentPayout = 1500.0,
+                payoutStatus = "Paid"
+            )
+            repository.updateComplaint(updated)
+
+            awardWorkerPoints(120)
+            unlockWorkerAchievement("first_mission")
+            if (_workerPoints.value > 250) unlockWorkerAchievement("work_veteran")
+
+            triggerRealTimeAlert(CivicAlert(
+                title = "✅ Grievance Resolved",
+                message = "Grievance #${complaint.id} '${complaint.title}' resolved. ₹1500 payout processed.",
+                urgency = "Low",
+                isEmergency = false
+            ))
+        }
+    }
+
+    /** Convenience: Citizen rates a resolved complaint */
+    fun rateComplaint(complaintId: Int, rating: Int, comment: String) {
+        viewModelScope.launch {
+            val currentComplaints = complaints.value
+            val complaint = currentComplaints.find { it.id == complaintId } ?: return@launch
+            val updated = complaint.copy(
+                rating = rating,
+                ratingComment = comment.ifBlank { null },
+                feedbackText = comment.ifBlank { null }
+            )
+            repository.updateComplaint(updated)
+
+            // Unlock citizen achievement
+            if (rating == 5) unlockAchievement("five_star_grader")
+            awardPoints(20) // points for giving feedback
+
+            // Award worker bonus based on rating
+            if (complaint.workerName != null) {
+                awardWorkerPoints(rating * 15)
+                if (rating == 5) unlockWorkerAchievement("gold_service")
+            }
+
+            triggerRealTimeAlert(CivicAlert(
+                title = "⭐ Rating Submitted",
+                message = "Thank you! You rated complaint #${complaint.id} with ${rating}★.",
+                urgency = "Low",
+                isEmergency = false
+            ))
+        }
+    }
 }
+

@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -53,6 +54,17 @@ import com.example.ui.viewmodel.CivicViewModel
 import com.example.ui.viewmodel.SubmitState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.util.Base64
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.viewinterop.AndroidView
 
 enum class Language(val displayName: String) {
     ENGLISH("English"),
@@ -509,7 +521,7 @@ fun SplashLoginScreen(
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
 
-    val rolesList = listOf("Citizen", "Ward Officer", "Department Officer", "Municipality Admin", "Mayor / Representative")
+    val rolesList = listOf("Citizen", "Worker", "Admin")
 
     Box(
         modifier = Modifier
@@ -870,10 +882,8 @@ fun SplashLoginScreen(
             ) {
                 val demoUsers = listOf(
                     Triple("Citizen", "citizen@civictrack.org", "citizen123"),
-                    Triple("Ward Officer", "ward@civictrack.org", "ward123"),
-                    Triple("Department Officer", "dept@civictrack.org", "dept123"),
-                    Triple("Municipality Admin", "admin@civictrack.org", "admin123"),
-                    Triple("Mayor / Representative", "mayor@civictrack.org", "mayor123")
+                    Triple("Worker", "worker@civictrack.org", "worker123"),
+                    Triple("Admin", "admin@civictrack.org", "admin123")
                 )
                 items(demoUsers) { (roleName, demoEmail, demoPass) ->
                     Card(
@@ -1012,6 +1022,7 @@ fun MainWorkspace(
     var activeSosDispatch by remember { mutableStateOf(false) }
     var showLanguageMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
     var customSosContact by remember { mutableStateOf("112") }
     var pushNotificationsEnabled by remember { mutableStateOf(true) }
     var textScaleMultiplier by remember { mutableStateOf(1.0f) }
@@ -1091,6 +1102,13 @@ fun MainWorkspace(
                             }
                         }
                     }
+                    IconButton(onClick = { showProfileDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.AccountCircle,
+                            contentDescription = "Profile",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Rounded.Settings,
@@ -1116,7 +1134,7 @@ fun MainWorkspace(
                             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)), RoundedCornerShape(10.dp))
                             .clickable {
                                 // Cycle through roles on click for easy judging testing!
-                                val roles = listOf("Citizen", "Ward Officer", "Department Officer", "Municipality Admin", "Mayor / Representative")
+                                val roles = listOf("Citizen", "Worker", "Admin")
                                 val nextIndex = (roles.indexOf(currentRole) + 1) % roles.size
                                 onChangeRole(roles[nextIndex])
                             }
@@ -1773,10 +1791,8 @@ fun DashboardScreen(
             Language.TAMIL -> "வணக்கம், குடிமகன்!"
             else -> "Hello, Citizen!"
         }
-        "Ward Officer" -> "Hello, Ward Officer!"
-        "Department Officer" -> "Hello, Department Officer!"
-        "Municipality Admin" -> "Hello, Municipality Admin!"
-        "Mayor / Representative" -> "Hello, Honorable Mayor!"
+        "Worker" -> "Hello, Civic Worker!"
+        "Admin" -> "Hello, Municipal Admin!"
         else -> "Hello, $currentRole!"
     }
 
@@ -3059,9 +3075,9 @@ fun AiAssistantScreen(
             "ಹಸಿರು ಸೌರ ಮೇಲ್ಛಾವಣಿ ಯೋಜನೆಗಳು ಯಾವುವು?"
         )
         Language.TAMIL -> listOf(
-            "இருப்பிடச் சான்றிதழுக்கு நான் எவ்வாறு விண்ணப்பிப்பது?",
-            "செக்டர் 4 சொத்து வரி தள்ளுபடியை விளக்குங்கள்",
-            "பசுமை சூரிய கூரை திட்டங்கள் யாவை?"
+            "இருப்பிடச் சான்றிதழுக்கு எவ்வாறு விண்ணப்பிப்பது?",
+            "துறை 4 சொத்து வரி தள்ளுபடி பற்றி விளக்கவும்",
+            "பசுமை சூரிய கூரை திட்டங்கள் என்னென்ன?"
         )
         else -> listOf(
             "How do I apply for a residence certificate?",
@@ -3270,234 +3286,213 @@ fun ComplaintsScreen(
 ) {
     val complaints by viewModel.complaints.collectAsState()
     val submitState by viewModel.submitState.collectAsState()
-    
+    val context = LocalContext.current
+
     var showReportSheet by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf<String?>(null) } // if null, AI categorizes automatically!
-    val context = LocalContext.current
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var complaintPhotoAttached by remember { mutableStateOf(false) }
+    var complaintLocation by remember { mutableStateOf("Tap pin to tag location") }
+
+    var resolvingId by remember { mutableStateOf<Int?>(null) }
+    var resolutionNote by remember { mutableStateOf("") }
+    var resolutionPhotoAttached by remember { mutableStateOf(false) }
+
+    var ratingId by remember { mutableStateOf<Int?>(null) }
+    var ratingStars by remember { mutableStateOf(0) }
+    var ratingComment by remember { mutableStateOf("") }
+    var tipAmount by remember { mutableStateOf("") }
 
     val categories = listOf("Roads", "Water Supply", "Garbage", "Drainage", "Electricity", "Public Safety", "Parks")
 
-    // Handle submission completion
     LaunchedEffect(submitState) {
-        if (submitState is SubmitState.Success) {
-            Toast.makeText(context, "Complaint lodged successfully!", Toast.LENGTH_LONG).show()
-            showReportSheet = false
-            title = ""
-            description = ""
-            selectedCategory = null
-            viewModel.resetSubmitState()
-        } else if (submitState is SubmitState.Error) {
-            Toast.makeText(context, (submitState as SubmitState.Error).message, Toast.LENGTH_LONG).show()
-            viewModel.resetSubmitState()
+        when (submitState) {
+            is SubmitState.Success -> {
+                Toast.makeText(context, "Complaint lodged!", Toast.LENGTH_LONG).show()
+                showReportSheet = false; title = ""; description = ""; selectedCategory = null
+                complaintPhotoAttached = false; complaintLocation = "Tap pin to tag location"
+                viewModel.resetSubmitState()
+            }
+            is SubmitState.Error -> {
+                Toast.makeText(context, (submitState as SubmitState.Error).message, Toast.LENGTH_LONG).show()
+                viewModel.resetSubmitState()
+            }
+            else -> {}
         }
     }
 
-    val titleText = when (selectedLanguage) {
-        Language.ENGLISH -> "Smart Grievance Hub"
+    val screenTitle = when (selectedLanguage) {
         Language.HINDI -> "स्मार्ट शिकायत केंद्र"
-        Language.MARATHI -> "स्मार्ट तक्रार निवारण केंद्र"
+        Language.MARATHI -> "स्मार्ट तक्रार निवारण"
         Language.KANNADA -> "ಸ್ಮಾರ್ಟ್ ದೂರು ಕೇಂದ್ರ"
         Language.TAMIL -> "ஸ்மார்ட் குறை தீர்க்கும் மையம்"
+        else -> "Smart Grievance Hub"
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(16.dp)
-        ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+
             if (currentRole != "Citizen") {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Rounded.Info, contentDescription = "Info", tint = Color(0xFFD97706))
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Info, null, tint = Color(0xFFD97706), modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Notice: You are logged in as a $currentRole. Only Citizens can submit complaints.",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF92400E)
+                            if (currentRole == "Worker") "Worker View — only assigned complaints shown." else "Admin View — all complaints visible.",
+                            fontSize = 11.sp, color = Color(0xFF92400E), fontWeight = FontWeight.Medium
                         )
                     }
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = titleText,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF0F172A)
-                )
-
-                // Quick statistics
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF2563EB).copy(alpha = 0.1f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        "${complaints.size} Total Cases",
-                        color = Color(0xFF2563EB),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(screenTitle, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF0F172A), letterSpacing = (-0.5).sp)
+                Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF007AFF).copy(alpha = 0.1f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                    Text("${complaints.size} Cases", color = Color(0xFF007AFF), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
-
             Spacer(modifier = Modifier.height(12.dp))
 
             if (complaints.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "No grievances reported. Click '+' to log an issue.",
-                        color = Color(0xFF64748B),
-                        textAlign = TextAlign.Center
-                    )
+                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("📋", fontSize = 52.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("No grievances filed yet.", color = Color(0xFF94A3B8), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        if (currentRole == "Citizen") Text("Tap + below to report an issue.", color = Color(0xFFCBD5E1), fontSize = 13.sp)
+                    }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
                     items(complaints) { complaint ->
+                        val visible = currentRole != "Worker" || complaint.workerName != null
+                        if (!visible) return@items
+
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("complaint_item"),
+                            modifier = Modifier.fillMaxWidth().testTag("complaint_item"),
                             colors = CardDefaults.cardColors(containerColor = Color.White),
                             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(18.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Title & Category tag
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = complaint.title,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0F172A)
-                                        )
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(top = 4.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(Color(0xFFE2E8F0))
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
+                                        Text(complaint.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF0F172A))
+                                        Row(modifier = Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFE2E8F0)).padding(horizontal = 6.dp, vertical = 2.dp)) {
                                                 Text(complaint.category, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
                                             }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(
-                                                        when (complaint.urgency) {
-                                                            "Low" -> Color(0xFFDCFCE7)
-                                                            "Medium" -> Color(0xFFFEF3C7)
-                                                            else -> Color(0xFFFEE2E2)
-                                                        }
-                                                    )
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    "Urgency: ${complaint.urgency}",
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = when (complaint.urgency) {
-                                                        "Low" -> Color(0xFF166534)
-                                                        "Medium" -> Color(0xFF92400E)
-                                                        else -> Color(0xFF991B1B)
-                                                    }
-                                                )
+                                            val (urgBg, urgColor) = when (complaint.urgency) {
+                                                "Low" -> Color(0xFFDCFCE7) to Color(0xFF166534)
+                                                "Medium" -> Color(0xFFFEF3C7) to Color(0xFF92400E)
+                                                else -> Color(0xFFFEE2E2) to Color(0xFF991B1B)
+                                            }
+                                            Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(urgBg).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                                Text(complaint.urgency, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = urgColor)
                                             }
                                         }
                                     }
-
-                                    // Status pill
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(20.dp))
-                                            .background(
-                                                when (complaint.status) {
-                                                    "Submitted" -> Color(0xFFEFF6FF)
-                                                    "In Progress" -> Color(0xFFFFF7ED)
-                                                    "Resolved" -> Color(0xFFECFDF5)
-                                                    else -> Color(0xFFF8FAFC)
-                                                }
-                                            )
-                                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = complaint.status,
-                                            color = when (complaint.status) {
-                                                "Submitted" -> Color(0xFF2563EB)
-                                                "In Progress" -> Color(0xFFEA580C)
-                                                "Resolved" -> Color(0xFF10B981)
-                                                else -> Color(0xFF64748B)
-                                            },
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
+                                    val (stBg, stColor) = when (complaint.status) {
+                                        "Submitted" -> Color(0xFFEFF6FF) to Color(0xFF2563EB)
+                                        "In Progress" -> Color(0xFFFFF7ED) to Color(0xFFEA580C)
+                                        "Resolved" -> Color(0xFFECFDF5) to Color(0xFF10B981)
+                                        else -> Color(0xFFF8FAFC) to Color(0xFF64748B)
+                                    }
+                                    Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(stBg).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                                        Text(complaint.status, color = stColor, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                Text(
-                                    text = complaint.description,
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF475569),
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-
                                 Spacer(modifier = Modifier.height(8.dp))
+                                Text(complaint.description, fontSize = 12.sp, color = Color(0xFF475569), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("📍 ${complaint.location}", fontSize = 10.sp, color = Color(0xFF64748B))
+                                    Text("Dept: ${complaint.department}", fontSize = 10.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)
+                                }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "📍 ${complaint.location}",
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF64748B),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        text = "Assignee: ${complaint.department}",
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF2563EB),
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                if (complaint.workerName != null && complaint.status == "In Progress") {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFFEA580C).copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Rounded.Build, null, tint = Color(0xFFEA580C), modifier = Modifier.size(18.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text("Worker Assigned", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFEA580C))
+                                                Text(complaint.workerName, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                                                if (complaint.workerInfo != null) Text(complaint.workerInfo, fontSize = 10.sp, color = Color(0xFF64748B))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (complaint.status == "Resolved") {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5)), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Rounded.CheckCircle, null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Resolved by ${complaint.workerName ?: "Municipal Worker"}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF065F46))
+                                            }
+                                            if (complaint.resolutionNote != null) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(complaint.resolutionNote, fontSize = 11.sp, color = Color(0xFF047857))
+                                            }
+                                            if (complaint.rating > 0) {
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    repeat(5) { i -> Icon(if (i < complaint.rating) Icons.Rounded.Star else Icons.Rounded.StarOutline, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(14.dp)) }
+                                                    if (!complaint.ratingComment.isNullOrBlank()) {
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("\"${complaint.ratingComment}\"", fontSize = 9.sp, color = Color(0xFF64748B))
+                                                    }
+                                                }
+                                            }
+                                            if (complaint.payoutStatus == "Paid") {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Rounded.Payments, null, tint = Color(0xFF10B981), modifier = Modifier.size(13.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Govt payout: Rs.${complaint.governmentPayout.toInt()} processed", fontSize = 10.sp, color = Color(0xFF065F46), fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (currentRole == "Citizen" && complaint.rating == 0) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Button(
+                                            onClick = { ratingId = complaint.id; ratingStars = 0; ratingComment = ""; tipAmount = "" },
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Rounded.Star, null, modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Rate Resolution & Tip Worker", fontSize = 13.sp)
+                                        }
+                                    }
+                                }
+
+                                if (currentRole == "Worker" && complaint.status == "In Progress" && complaint.workerName != null) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Button(
+                                        onClick = { resolvingId = complaint.id; resolutionNote = ""; resolutionPhotoAttached = false },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Rounded.CheckCircle, null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Mark as Resolved")
+                                    }
                                 }
                             }
                         }
@@ -3506,86 +3501,119 @@ fun ComplaintsScreen(
             }
         }
 
-        // Log Issue Floating Action Button
         if (currentRole == "Citizen") {
             FloatingActionButton(
                 onClick = { showReportSheet = true },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(24.dp)
-                    .testTag("add_complaint_fab"),
-                containerColor = Color(0xFF2563EB),
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add Complaint")
-            }
+                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).testTag("add_complaint_fab"),
+                containerColor = Color(0xFF007AFF), contentColor = Color.White, shape = CircleShape
+            ) { Icon(Icons.Rounded.Add, "Add") }
         }
 
-        // Sheet Bottom Sheet Mock dialog
         if (showReportSheet) {
             AlertDialog(
                 onDismissRequest = { showReportSheet = false },
-                title = { Text("Log New Grievance", fontWeight = FontWeight.Bold) },
+                shape = RoundedCornerShape(24.dp), containerColor = Color.White,
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF007AFF).copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Report, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Log New Grievance", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    }
+                },
                 text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = title,
-                            onValueChange = { title = it },
-                            label = { Text("Title of Issue") },
-                            placeholder = { Text("e.g. Blown transformers, open sewer") },
-                            modifier = Modifier.fillMaxWidth().testTag("complaint_title_input")
-                        )
-
-                        OutlinedTextField(
-                            value = description,
-                            onValueChange = { description = it },
-                            label = { Text("Description & Location details") },
-                            placeholder = { Text("Provide helpful details. AI will auto-categorize and route to departments.") },
-                            modifier = Modifier.fillMaxWidth().testTag("complaint_desc_input"),
-                            minLines = 3
-                        )
-
-                        Text("Optional Override Category (leave unselected for AI routing):", fontSize = 10.sp, color = Color(0xFF64748B))
-
+                    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Issue Title") }, placeholder = { Text("e.g. Pothole on Ring Road") }, modifier = Modifier.fillMaxWidth().testTag("complaint_title_input"), shape = RoundedCornerShape(12.dp))
+                        OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, placeholder = { Text("Describe in detail. AI will auto-categorize.") }, modifier = Modifier.fillMaxWidth().testTag("complaint_desc_input"), minLines = 3, shape = RoundedCornerShape(12.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                complaintPhotoAttached = true
+                                Toast.makeText(context, "Photo attached (demo)", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = CardDefaults.cardColors(containerColor = if (complaintPhotoAttached) Color(0xFFECFDF5) else Color(0xFFF8FAFC)),
+                            shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (complaintPhotoAttached) Icons.Rounded.CheckCircle else Icons.Rounded.PhotoCamera, null, tint = if (complaintPhotoAttached) Color(0xFF10B981) else Color(0xFF64748B), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(if (complaintPhotoAttached) "Photo attached" else "Tap to attach photo", fontSize = 13.sp, color = if (complaintPhotoAttached) Color(0xFF065F46) else Color(0xFF475569))
+                            }
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                complaintLocation = "Ward 4, Sector A - 12.9716N 77.5946E"
+                                Toast.makeText(context, "Location tagged (OSM demo)", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F9FF)),
+                            shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.MyLocation, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text("Tap to Tag Location", fontSize = 10.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)
+                                    Text(complaintLocation, fontSize = 11.sp, color = Color(0xFF475569))
+                                }
+                            }
+                        }
+                        Text("Override AI Category (optional):", fontSize = 10.sp, color = Color(0xFF94A3B8))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             items(categories) { cat ->
-                                FilterChip(
-                                    selected = selectedCategory == cat,
-                                    onClick = { selectedCategory = if (selectedCategory == cat) null else cat },
-                                    label = { Text(cat, fontSize = 10.sp) }
-                                )
+                                FilterChip(selected = selectedCategory == cat, onClick = { selectedCategory = if (selectedCategory == cat) null else cat }, label = { Text(cat, fontSize = 10.sp) })
                             }
                         }
-
-                        // GPS Tag preview
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFF1F5F9))
-                                .padding(10.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Rounded.MyLocation, contentDescription = "Location", tint = Color(0xFF2563EB), modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    "GPS Tagged: Lat 40.7128 • Long -74.0060 (Ward 4 Sector A)",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF475569)
-                                )
-                            }
-                        }
-
                         if (submitState is SubmitState.Submitting) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFF007AFF))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Analyzing report via Gemini AI model...", fontSize = 10.sp)
+                                Text("Analyzing via Gemini AI...", fontSize = 11.sp, color = Color(0xFF475569))
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { viewModel.submitComplaint(title, description, null, selectedCategory) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))) { Text("Log & AI Route") }
+                },
+                dismissButton = { TextButton(onClick = { showReportSheet = false }) { Text("Cancel", color = Color(0xFF64748B)) } }
+            )
+        }
+
+        if (resolvingId != null) {
+            AlertDialog(
+                onDismissRequest = { resolvingId = null },
+                shape = RoundedCornerShape(24.dp), containerColor = Color.White,
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF10B981).copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.CheckCircle, null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Mark as Resolved", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    }
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(value = resolutionNote, onValueChange = { resolutionNote = it }, label = { Text("Resolution Note") }, placeholder = { Text("What was done to fix this issue?") }, modifier = Modifier.fillMaxWidth(), minLines = 3, shape = RoundedCornerShape(12.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                resolutionPhotoAttached = true
+                                Toast.makeText(context, "After-work photo attached (demo)", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = CardDefaults.cardColors(containerColor = if (resolutionPhotoAttached) Color(0xFFECFDF5) else Color(0xFFF8FAFC)),
+                            shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (resolutionPhotoAttached) Icons.Rounded.CheckCircle else Icons.Rounded.PhotoCamera, null, tint = if (resolutionPhotoAttached) Color(0xFF10B981) else Color(0xFF64748B), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(if (resolutionPhotoAttached) "After-work photo attached" else "Attach after-work photo", fontSize = 13.sp)
+                            }
+                        }
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Payments, null, tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Rs.1,500 govt payout auto-credited on resolution.", fontSize = 11.sp, color = Color(0xFF065F46))
                             }
                         }
                     }
@@ -3593,23 +3621,78 @@ fun ComplaintsScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            viewModel.submitComplaint(title, description, null, selectedCategory)
+                            if (resolutionNote.isBlank()) Toast.makeText(context, "Please add a resolution note", Toast.LENGTH_SHORT).show()
+                            else {
+                                viewModel.resolveComplaint(resolvingId!!, resolutionNote, if (resolutionPhotoAttached) "photo_attached" else null)
+                                Toast.makeText(context, "Complaint resolved! Rs.1500 payout initiated.", Toast.LENGTH_LONG).show()
+                                resolvingId = null
+                            }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                    ) {
-                        Text("Log & AI Route")
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) { Text("Confirm Resolved") }
+                },
+                dismissButton = { TextButton(onClick = { resolvingId = null }) { Text("Cancel", color = Color(0xFF64748B)) } }
+            )
+        }
+
+        if (ratingId != null) {
+            AlertDialog(
+                onDismissRequest = { ratingId = null },
+                shape = RoundedCornerShape(24.dp), containerColor = Color.White,
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFFF59E0B).copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Star, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Rate Resolution", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                     }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showReportSheet = false }) {
-                        Text("Cancel")
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text("How satisfied are you with the resolution?", fontSize = 13.sp, color = Color(0xFF475569), textAlign = TextAlign.Center)
+                        Row(horizontalArrangement = Arrangement.Center) {
+                            repeat(5) { i ->
+                                IconButton(onClick = { ratingStars = i + 1 }, modifier = Modifier.size(44.dp)) {
+                                    Icon(if (i < ratingStars) Icons.Rounded.Star else Icons.Rounded.StarOutline, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(32.dp))
+                                }
+                            }
+                        }
+                        val labels = listOf("", "Poor", "Fair", "Good", "Very Good", "Excellent!")
+                        if (ratingStars > 0) Text(labels[ratingStars], fontWeight = FontWeight.Bold, color = Color(0xFFF59E0B), fontSize = 14.sp)
+                        OutlinedTextField(value = ratingComment, onValueChange = { ratingComment = it }, label = { Text("Optional comment") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                        HorizontalDivider(color = Color(0xFFE2E8F0))
+                        Text("Tip for Worker (optional)", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("0" to "Skip", "10" to "Rs.10", "20" to "Rs.20", "50" to "Rs.50", "100" to "Rs.100").forEach { (amt, label) ->
+                                FilterChip(selected = tipAmount == amt, onClick = { tipAmount = amt }, label = { Text(label, fontSize = 11.sp) })
+                            }
+                        }
+                        Text("Tip goes directly to the worker via UPI (demo).", fontSize = 10.sp, color = Color(0xFF94A3B8), textAlign = TextAlign.Center)
                     }
                 },
-                containerColor = Color.White
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (ratingStars == 0) Toast.makeText(context, "Please select a star rating", Toast.LENGTH_SHORT).show()
+                            else {
+                                val tip = tipAmount.toDoubleOrNull() ?: 0.0
+                                viewModel.rateAndTipWorker(ratingId!!, ratingStars, ratingComment.ifBlank { null }, tip)
+                                Toast.makeText(context, "Rating submitted! ${if (tip > 0) "Rs.${tip.toInt()} tip sent." else ""}", Toast.LENGTH_LONG).show()
+                                ratingId = null
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                    ) { Text("Submit Rating") }
+                },
+                dismissButton = { TextButton(onClick = { ratingId = null }) { Text("Skip", color = Color(0xFF64748B)) } }
             )
         }
     }
 }
+
 
 // =========================================================================
 // 6. TRANSPARENCY: TENDERS & SDG PROJECTS
@@ -4084,6 +4167,12 @@ fun ServicesScreen(
     var showDispatchDialog by remember { mutableStateOf(false) }
     var showApprovalsDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
+    var showHealthDialog by remember { mutableStateOf(false) }
+    var showJobsDialog by remember { mutableStateOf(false) }
+    var showNewsDialog by remember { mutableStateOf(false) }
+    var showAppointmentDialog by remember { mutableStateOf(false) }
+    var showLeaderboardDialog by remember { mutableStateOf(false) }
 
     val isCitizen = currentRole == "Citizen"
     val isWardOfficer = currentRole == "Ward Officer"
@@ -4113,7 +4202,12 @@ fun ServicesScreen(
         ServiceTile(Icons.Rounded.EventAvailable, "Facility Bookings", "Book halls, parks & public spaces", Color(0xFF0F172A), Color(0xFFF1F5F9), { showBookingsDialog = true }),
         ServiceTile(Icons.Rounded.DirectionsBus, "Public Transit", "Bus schedules, routes & passes", Color(0xFF0284C7), Color(0xFFE0F2FE), { showTransitDialog = true }),
         ServiceTile(Icons.Rounded.EnergySavingsLeaf, "Environment Report", "File pollution or waste complaints", Color(0xFF22C55E), Color(0xFFDCFCE7), { showEnvironmentDialog = true }),
-        ServiceTile(Icons.Rounded.Lightbulb, "Suggestions Box", "Submit ideas for city improvement", Color(0xFF7C3AED), Color(0xFFEDE9FE), { showSuggestionsDialog = true })
+        ServiceTile(Icons.Rounded.Lightbulb, "Suggestions Box", "Submit ideas for city improvement", Color(0xFF7C3AED), Color(0xFFEDE9FE), { showSuggestionsDialog = true }),
+        ServiceTile(Icons.Rounded.LocalHospital, "Health Services", "Hospitals, vaccination & ambulance", Color(0xFFEF4444), Color(0xFFFFF1F2), { showHealthDialog = true }),
+        ServiceTile(Icons.Rounded.Work, "Jobs & Employment", "Local jobs, skill programs & MSME", Color(0xFF0284C7), Color(0xFFE0F2FE), { showJobsDialog = true }),
+        ServiceTile(Icons.Rounded.Newspaper, "News & Updates", "Latest municipal news & announcements", Color(0xFFF59E0B), Color(0xFFFEF3C7), { showNewsDialog = true }),
+        ServiceTile(Icons.Rounded.CalendarMonth, "Book Appointment", "Schedule a visit with ward officers", Color(0xFF10B981), Color(0xFFDCFCE7), { showAppointmentDialog = true }),
+        ServiceTile(Icons.Rounded.Leaderboard, "Civic Leaderboard", "Top contributors in your ward", Color(0xFF8B5CF6), Color(0xFFF3E8FF), { showLeaderboardDialog = true })
     ) else emptyList()
 
     val officialServices = when {
@@ -4406,6 +4500,28 @@ fun ServicesScreen(
             onDismiss = { showFeedbackDialog = false }
         )
     }
+    if (showProfileDialog) {
+        ProfileDialog(
+            currentRole = currentRole,
+            viewModel = viewModel,
+            onDismiss = { showProfileDialog = false }
+        )
+    }
+    if (showHealthDialog) {
+        HealthServicesDialog(onDismiss = { showHealthDialog = false })
+    }
+    if (showJobsDialog) {
+        JobsDialog(onDismiss = { showJobsDialog = false })
+    }
+    if (showNewsDialog) {
+        NewsDialog(onDismiss = { showNewsDialog = false })
+    }
+    if (showAppointmentDialog) {
+        AppointmentDialog(onDismiss = { showAppointmentDialog = false })
+    }
+    if (showLeaderboardDialog) {
+        LeaderboardDialog(viewModel = viewModel, currentRole = currentRole, onDismiss = { showLeaderboardDialog = false })
+    }
 }
 
 // =========================================================================
@@ -4423,16 +4539,30 @@ fun CertificatesDialog(
     val context = LocalContext.current
     var selectedType by remember { mutableStateOf("Birth Certificate") }
     var applicantName by remember { mutableStateOf("") }
-    var additionalDetails by remember { mutableStateOf("") }
     var showForm by remember { mutableStateOf(false) }
     val certTypes = listOf("Birth Certificate", "Death Certificate", "Residence Certificate", "Income Certificate", "Character Certificate")
+
+    // Type-specific extra fields
+    var dobField by remember { mutableStateOf("") }
+    var placeField by remember { mutableStateOf("") }
+    var fatherNameField by remember { mutableStateOf("") }
+    var motherNameField by remember { mutableStateOf("") }
+    var causeOfDeathField by remember { mutableStateOf("") }
+    var addressField by remember { mutableStateOf("") }
+    var yearsResidingField by remember { mutableStateOf("") }
+    var ownershipTypeField by remember { mutableStateOf("") }
+    var annualIncomeField by remember { mutableStateOf("") }
+    var occupationField by remember { mutableStateOf("") }
+    var employerField by remember { mutableStateOf("") }
+    var purposeField by remember { mutableStateOf("") }
+    var refPersonField by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Description, contentDescription = null, tint = Color(0xFF0EA5E9))
+                Icon(Icons.Rounded.Description, contentDescription = null, tint = Color(0xFF007AFF))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Certificate Services", fontWeight = FontWeight.Bold)
             }
@@ -4450,11 +4580,19 @@ fun CertificatesDialog(
                     Text("No applications yet. Apply below!", fontSize = 12.sp, color = Color(0xFF64748B))
                 } else {
                     sharedCertificates.forEach { cert ->
+                        val bgColor = when (cert.status) {
+                            "Approved" -> Color(0xFFDCFCE7)
+                            "Rejected" -> Color(0xFFFEE2E2)
+                            else -> Color(0xFFFFF7ED)
+                        }
+                        val statusColor = when (cert.status) {
+                            "Approved" -> Color(0xFF22C55E)
+                            "Rejected" -> Color(0xFFEF4444)
+                            else -> Color(0xFFF59E0B)
+                        }
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (cert.status == "Approved") Color(0xFFDCFCE7) else Color(0xFFFFF7ED)
-                            ),
+                            colors = CardDefaults.cardColors(containerColor = bgColor),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
@@ -4466,13 +4604,14 @@ fun CertificatesDialog(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(if (cert.status == "Approved") Color(0xFF22C55E) else Color(0xFFF59E0B))
+                                            .background(statusColor)
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
                                         Text(cert.status, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                     }
                                 }
                                 Text("Applicant: ${cert.applicantName}", fontSize = 11.sp, color = Color(0xFF475569))
+                                Text("Details: ${cert.details}", fontSize = 10.sp, color = Color(0xFF64748B), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text("Tracking: ${cert.trackingNo}", fontSize = 10.sp, color = Color(0xFF94A3B8))
                             }
                         }
@@ -4488,7 +4627,7 @@ fun CertificatesDialog(
                         onClick = { showForm = true },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0EA5E9))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
                     ) {
                         Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -4505,7 +4644,7 @@ fun CertificatesDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (selectedType == type) Color(0xFFE0F2FE) else Color.Transparent)
+                                .background(if (selectedType == type) Color(0xFFE0F0FF) else Color.Transparent)
                                 .clickable { selectedType = type }
                                 .padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -4513,12 +4652,12 @@ fun CertificatesDialog(
                             RadioButton(
                                 selected = selectedType == type,
                                 onClick = { selectedType = type },
-                                colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF0EA5E9))
+                                colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF007AFF))
                             )
                             Text(type, fontSize = 13.sp, color = Color(0xFF0F172A))
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     OutlinedTextField(
                         value = applicantName,
                         onValueChange = { applicantName = it },
@@ -4527,15 +4666,56 @@ fun CertificatesDialog(
                         shape = RoundedCornerShape(10.dp)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = additionalDetails,
-                        onValueChange = { additionalDetails = it },
-                        label = { Text("Additional Details") },
-                        placeholder = { Text("e.g. Father's name, DOB, address") },
-                        minLines = 2,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    )
+
+                    // Type-specific required fields
+                    when (selectedType) {
+                        "Birth Certificate" -> {
+                            Text("📝 Required: Birth Certificate Info", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF007AFF))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = dobField, onValueChange = { dobField = it }, label = { Text("Date of Birth (DD/MM/YYYY)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = placeField, onValueChange = { placeField = it }, label = { Text("Place of Birth / Hospital") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = fatherNameField, onValueChange = { fatherNameField = it }, label = { Text("Father's Full Name") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = motherNameField, onValueChange = { motherNameField = it }, label = { Text("Mother's Full Name") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                        }
+                        "Death Certificate" -> {
+                            Text("📝 Required: Death Certificate Info", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF007AFF))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = dobField, onValueChange = { dobField = it }, label = { Text("Date of Death (DD/MM/YYYY)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = placeField, onValueChange = { placeField = it }, label = { Text("Place of Death") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = causeOfDeathField, onValueChange = { causeOfDeathField = it }, label = { Text("Cause of Death") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                        }
+                        "Residence Certificate" -> {
+                            Text("📝 Required: Residence Info", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF007AFF))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = addressField, onValueChange = { addressField = it }, label = { Text("Current Full Address") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = yearsResidingField, onValueChange = { yearsResidingField = it }, label = { Text("Years Residing at Address") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = ownershipTypeField, onValueChange = { ownershipTypeField = it }, label = { Text("Ownership Type (Own/Rented/Govt Quarter)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                        }
+                        "Income Certificate" -> {
+                            Text("📝 Required: Income Info", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF007AFF))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = annualIncomeField, onValueChange = { annualIncomeField = it }, label = { Text("Annual Income (₹)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = occupationField, onValueChange = { occupationField = it }, label = { Text("Occupation") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = employerField, onValueChange = { employerField = it }, label = { Text("Employer / Business Name") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                        }
+                        "Character Certificate" -> {
+                            Text("📝 Required: Character Info", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF007AFF))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = purposeField, onValueChange = { purposeField = it }, label = { Text("Purpose (Job / Education / Passport)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(value = refPersonField, onValueChange = { refPersonField = it }, label = { Text("Reference Person & Contact") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
@@ -4550,26 +4730,33 @@ fun CertificatesDialog(
                                 if (applicantName.isBlank()) {
                                     Toast.makeText(context, "Please enter applicant name", Toast.LENGTH_SHORT).show()
                                 } else {
+                                    val details = when (selectedType) {
+                                        "Birth Certificate" -> "DOB: $dobField | Place: $placeField | Father: $fatherNameField | Mother: $motherNameField"
+                                        "Death Certificate" -> "Date: $dobField | Place: $placeField | Cause: $causeOfDeathField"
+                                        "Residence Certificate" -> "Address: $addressField | Years: $yearsResidingField | Type: $ownershipTypeField"
+                                        "Income Certificate" -> "Income: ₹$annualIncomeField | Occupation: $occupationField | Employer: $employerField"
+                                        "Character Certificate" -> "Purpose: $purposeField | Reference: $refPersonField"
+                                        else -> "No additional details"
+                                    }
                                     val newId = "${selectedType.first()}C-${(1000..9999).random()}"
                                     val newTxn = "TXN${(100000..999999).random()}"
                                     val newCert = CertificateApplication(
                                         id = newId,
                                         type = selectedType,
                                         applicantName = applicantName.trim(),
-                                        details = additionalDetails.trim().ifBlank { "No additional details provided" },
+                                        details = details,
                                         status = "Pending Approval",
                                         trackingNo = newTxn
                                     )
                                     onUpdateCertificates(sharedCertificates + newCert)
                                     applicantName = ""
-                                    additionalDetails = ""
                                     showForm = false
                                     Toast.makeText(context, "Application $newId submitted! Track with $newTxn", Toast.LENGTH_LONG).show()
                                 }
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0EA5E9))
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
                         ) {
                             Text("Submit")
                         }
@@ -4585,6 +4772,8 @@ fun CertificatesDialog(
         shape = RoundedCornerShape(20.dp)
     )
 }
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -6151,6 +6340,967 @@ fun CitizenFeedbackDialog(
                     Text("Export Sentiment Report", fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Close", color = Color(0xFF64748B))
+                }
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+// =========================================================================
+// PROFILE DIALOG
+// =========================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileDialog(
+    currentRole: String,
+    viewModel: CivicViewModel,
+    onDismiss: () -> Unit
+) {
+    val citizenPoints by viewModel.citizenPoints.collectAsState()
+    val workerPoints by viewModel.workerPoints.collectAsState()
+    val earnedAchievements by viewModel.earnedAchievements.collectAsState()
+    val earnedWorkerAchievements by viewModel.earnedWorkerAchievements.collectAsState()
+    val complaints by viewModel.complaints.collectAsState()
+
+    val isWorker = currentRole == "Worker"
+    val totalPoints = if (isWorker) workerPoints else citizenPoints
+    val earnedAchs = if (isWorker) earnedWorkerAchievements else earnedAchievements
+    val achList = if (isWorker) viewModel.workerAchievementsList else viewModel.achievementsList
+
+    // Stats
+    val myComplaints = if (isWorker) complaints.filter { it.workerName != null } else complaints
+    val resolvedCount = myComplaints.count { it.status == "Resolved" }
+    val inProgressCount = myComplaints.count { it.status == "In Progress" }
+    val totalEarned = if (isWorker) myComplaints.sumOf { it.governmentPayout } else 0.0
+    val totalTips = if (isWorker) myComplaints.sumOf { it.tipAmount } else 0.0
+
+    val headerGradient = if (isWorker)
+        Brush.linearGradient(listOf(Color(0xFF065F46), Color(0xFF10B981)))
+    else
+        Brush.linearGradient(listOf(Color(0xFF1E40AF), Color(0xFF7C3AED)))
+
+    val profileName = when (currentRole) {
+        "Citizen" -> "Priya Sharma"; "Worker" -> "Rajan Patel"; "Admin" -> "Dr. Meena Kulkarni"; else -> "User"
+    }
+    val profileId = when (currentRole) {
+        "Citizen" -> "CT-2026-W4-7842"; "Worker" -> "WK-2026-W4-0312"; "Admin" -> "ADM-2026-001"; else -> "N/A"
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+
+                // ── Gradient header ─────────────────────────────────
+                Box(modifier = Modifier.fillMaxWidth().background(headerGradient).padding(24.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(modifier = Modifier.size(72.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                            Text(if (isWorker) "🔧" else "👤", fontSize = 36.sp)
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(profileName, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                        Text("Ward 4 · $currentRole", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.2f)).padding(horizontal = 16.dp, vertical = 6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Star, null, tint = Color(0xFFFBBF24), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("$totalPoints ${if (isWorker) "Worker" else "Citizen"} XP", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+
+                Column(modifier = Modifier.padding(20.dp)) {
+
+                    // ── Stats cards ─────────────────────────────────
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val stats = if (isWorker) listOf(
+                            Triple("${myComplaints.size}", "Assigned", Color(0xFF3B82F6)),
+                            Triple("$resolvedCount", "Resolved", Color(0xFF10B981)),
+                            Triple("Rs.${(totalEarned + totalTips).toInt()}", "Earned", Color(0xFFF59E0B))
+                        ) else listOf(
+                            Triple("${myComplaints.size}", "Filed", Color(0xFF3B82F6)),
+                            Triple("$resolvedCount", "Resolved", Color(0xFF10B981)),
+                            Triple("${earnedAchs.size}", "Badges", Color(0xFFF59E0B))
+                        )
+                        stats.forEach { (value, label, color) ->
+                            Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.08f)), shape = RoundedCornerShape(12.dp)) {
+                                Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = color)
+                                    Text(label, fontSize = 10.sp, color = Color(0xFF64748B), textAlign = TextAlign.Center)
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Worker earnings ─────────────────────────────
+                    if (isWorker && (totalEarned > 0 || totalTips > 0)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("💰 Earnings", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = Color(0xFF0F172A))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Govt Payouts", fontSize = 13.sp, color = Color(0xFF475569))
+                                    Text("Rs.${totalEarned.toInt()}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                                }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Citizen Tips Received", fontSize = 13.sp, color = Color(0xFF475569))
+                                    Text("Rs.${totalTips.toInt()}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF59E0B))
+                                }
+                                HorizontalDivider(color = Color(0xFFBBF7D0))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Total", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                                    Text("Rs.${(totalEarned + totalTips).toInt()}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF065F46))
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Achievements ─────────────────────────────────
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("🏆 Achievements", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = Color(0xFF0F172A))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (achList.isEmpty() || earnedAchs.isEmpty()) {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)), shape = RoundedCornerShape(12.dp)) {
+                            Text("No badges yet. Complete tasks to earn badges!", modifier = Modifier.padding(14.dp), fontSize = 12.sp, color = Color(0xFF94A3B8))
+                        }
+                    }
+                    // Earned badges
+                    achList.filter { it.id in earnedAchs }.forEach { ach ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFFEF3C7)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.EmojiEvents, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(ach.title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                                Text(ach.description, fontSize = 10.sp, color = Color(0xFF64748B))
+                            }
+                            Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFFF59E0B).copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                Text("+${ach.points}XP", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFD97706))
+                            }
+                        }
+                    }
+                    // Locked badges (greyed out)
+                    achList.filter { it.id !in earnedAchs }.forEach { ach ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFF1F5F9)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Lock, null, tint = Color(0xFFCBD5E1), modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(ach.title, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = Color(0xFF94A3B8))
+                                Text(ach.description, fontSize = 10.sp, color = Color(0xFFCBD5E1))
+                            }
+                            Text("+${ach.points}XP", fontSize = 11.sp, color = Color(0xFFCBD5E1))
+                        }
+                    }
+
+                    // ── Points leaderboard table ──────────────────────
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("📊 Points Breakdown", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = Color(0xFF0F172A))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            // Header
+                            Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(Color(0xFFE2E8F0)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                Text("Activity", modifier = Modifier.weight(1f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                                Text("XP", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                            }
+                            val tableRows = if (isWorker) listOf(
+                                "First Complaint Resolved" to 100, "Project Progress Update" to 100,
+                                "Gold 5★ Rating" to 150, "250+ XP Veteran Bonus" to 200,
+                                "Per Resolution" to 120, "Citizen Rating Bonus (per ★)" to 15
+                            ) else listOf(
+                                "First Grievance Filed" to 100, "Voted in Poll" to 50,
+                                "AI Chat Interaction" to 30, "5★ Rating Given" to 50,
+                                "Elder Mode Used" to 25, "Rating Submitted" to 20
+                            )
+                            tableRows.forEachIndexed { idx, (activity, xp) ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().background(if (idx % 2 == 0) Color.Transparent else Color(0xFFF1F5F9)).padding(horizontal = 10.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(activity, modifier = Modifier.weight(1f), fontSize = 11.sp, color = Color(0xFF475569))
+                                    Text("+$xp", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isWorker) Color(0xFF10B981) else Color(0xFF007AFF))
+                                }
+                            }
+                            HorizontalDivider(color = Color(0xFFE2E8F0))
+                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Your Total XP", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0F172A))
+                                Text("$totalPoints XP", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = if (isWorker) Color(0xFF10B981) else Color(0xFF007AFF))
+                            }
+                        }
+                    }
+
+                    // ── Complaint / Work History ──────────────────────
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(if (isWorker) "🗂️ Work History" else "🗂️ Complaint History", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = Color(0xFF0F172A))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (myComplaints.isEmpty()) {
+                        Text("No history yet.", fontSize = 12.sp, color = Color(0xFF94A3B8))
+                    } else {
+                        myComplaints.take(5).forEach { c ->
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)), shape = RoundedCornerShape(10.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    val (stColor, stBg) = when (c.status) {
+                                        "Resolved" -> Color(0xFF10B981) to Color(0xFFECFDF5)
+                                        "In Progress" -> Color(0xFFEA580C) to Color(0xFFFFF7ED)
+                                        else -> Color(0xFF2563EB) to Color(0xFFEFF6FF)
+                                    }
+                                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(stColor))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(c.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0F172A), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text("${c.category} · ${c.status}", fontSize = 10.sp, color = Color(0xFF64748B))
+                                    }
+                                    Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(stBg).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                        Text(c.status, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = stColor)
+                                    }
+                                }
+                            }
+                        }
+                        if (myComplaints.size > 5) {
+                            Text("+ ${myComplaints.size - 5} more", fontSize = 11.sp, color = Color(0xFF007AFF), modifier = Modifier.padding(top = 4.dp))
+                        }
+                    }
+
+                    // ── Profile info ─────────────────────────────────
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("👤 Profile Info", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = Color(0xFF0F172A))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                "Email" to "${currentRole.lowercase()}@civictrack.org",
+                                "Mobile" to "+91 98765 43210",
+                                "Ward" to "Ward 4, Smart Sector A",
+                                "ID" to profileId,
+                                "Member Since" to "January 2025"
+                            ).forEach { (label, value) ->
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(label, fontSize = 12.sp, color = Color(0xFF64748B))
+                                    Text(value, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0F172A))
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))) {
+                        Text("Close Profile", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =========================================================================
+// HEALTH SERVICES DIALOG
+// =========================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HealthServicesDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val hospitals = remember {
+        listOf(
+            Triple("Ward 4 Government Hospital", "NH-4, Sector A · 24/7 Emergency", "022-2345-6789"),
+            Triple("Rajiv Gandhi Health Centre", "Civic Lane 12, Sector B · OPD: 8AM–6PM", "022-2345-6790"),
+            Triple("Mata Kasturba Clinic", "Market Road, Block C · Mon–Sat", "022-2345-6791"),
+            Triple("District Blood Bank", "Civil Hospital Campus · 24/7", "022-2345-6792")
+        )
+    }
+    val vaccineSchedule = remember {
+        listOf(
+            Pair("Polio Drive", "15 July 2026 · All wards"),
+            Pair("MMR Vaccination", "22 July 2026 · PHC Sector B"),
+            Pair("COVID Booster", "1 Aug 2026 · Ward Office"),
+            Pair("Flu Shot Camp", "10 Aug 2026 · Community Hall")
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.LocalHospital, contentDescription = null, tint = Color(0xFFEF4444))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Health Services", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Emergency contacts
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("🚑 Ambulance" to "108", "🏥 Hospital" to "102", "🩸 Blood" to "104").forEach { (label, num) ->
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2)),
+                            shape = RoundedCornerShape(10.dp),
+                            onClick = { Toast.makeText(context, "Calling $label: $num", Toast.LENGTH_SHORT).show() }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7F1D1D), textAlign = TextAlign.Center)
+                                Text(num, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFEF4444))
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Text("🏥 Nearby Hospitals & Clinics", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color(0xFF0F172A))
+                Spacer(modifier = Modifier.height(8.dp))
+                hospitals.forEach { (name, address, phone) ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.LocalHospital, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                                Text(address, fontSize = 10.sp, color = Color(0xFF64748B))
+                                Text(phone, fontSize = 11.sp, color = Color(0xFF0284C7), fontWeight = FontWeight.SemiBold)
+                            }
+                            IconButton(onClick = { Toast.makeText(context, "Calling $phone", Toast.LENGTH_SHORT).show() }) {
+                                Icon(Icons.Rounded.Phone, contentDescription = "Call", tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Text("💉 Upcoming Vaccination Drives", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color(0xFF0F172A))
+                Spacer(modifier = Modifier.height(8.dp))
+                vaccineSchedule.forEach { (name, detail) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFEFF6FF))
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Vaccines, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                            Text(detail, fontSize = 10.sp, color = Color(0xFF64748B))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Close", color = Color(0xFF64748B))
+                }
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+// =========================================================================
+// JOBS & EMPLOYMENT DIALOG
+// =========================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun JobsDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val jobs = remember {
+        listOf(
+            Triple("Junior Civil Engineer", "PWD – Roads & Highways · Full Time", "₹35,000/mo"),
+            Triple("Sanitation Supervisor", "Municipal Sanitation Board · Contract", "₹22,000/mo"),
+            Triple("Data Entry Operator", "Ward Office, Sector 4 · Part Time", "₹15,000/mo"),
+            Triple("Electrician Technician", "Municipal Power Utility · Full Time", "₹28,000/mo"),
+            Triple("Community Health Worker", "PHC Sector B · Contractual", "₹18,500/mo")
+        )
+    }
+    val skillPrograms = remember {
+        listOf(
+            Pair("Digital Literacy Certificate", "Free · 4 weeks · Online"),
+            Pair("Plumbing & Sanitation Skills", "Free · 6 weeks · ITI Sector A"),
+            Pair("Mobile App Development", "Free · 8 weeks · Online"),
+            Pair("Agri-Tech Training", "Free · 3 weeks · Krishi Centre")
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Work, contentDescription = null, tint = Color(0xFF0284C7))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Jobs & Employment", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text("📋 Municipal Job Openings", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color(0xFF0F172A))
+                Spacer(modifier = Modifier.height(8.dp))
+                jobs.forEach { (title, dept, salary) ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Color(0xFF0284C7).copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(Color(0xFF0284C7).copy(alpha = 0.1f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.Work, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                                Text(dept, fontSize = 10.sp, color = Color(0xFF64748B))
+                                Text(salary, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF10B981))
+                            }
+                            TextButton(
+                                onClick = { Toast.makeText(context, "Opening application for: $title", Toast.LENGTH_SHORT).show() }
+                            ) { Text("Apply", fontSize = 11.sp, color = Color(0xFF0284C7), fontWeight = FontWeight.Bold) }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Text("📚 Free Skill Development Programs", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color(0xFF0F172A))
+                Spacer(modifier = Modifier.height(8.dp))
+                skillPrograms.forEach { (name, detail) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFF0FDF4))
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.School, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                            Text(detail, fontSize = 10.sp, color = Color(0xFF64748B))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { Toast.makeText(context, "Opening Municipal Job Portal...", Toast.LENGTH_SHORT).show(); onDismiss() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+                ) {
+                    Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Visit Full Job Portal", fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Close", color = Color(0xFF64748B))
+                }
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+// =========================================================================
+// NEWS & UPDATES DIALOG
+// =========================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NewsDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val categories = listOf("All", "Infrastructure", "Health", "Environment", "Events")
+    var selectedCategory by remember { mutableStateOf("All") }
+
+    data class NewsItem(
+        val headline: String,
+        val summary: String,
+        val date: String,
+        val category: String,
+        val color: Color,
+        val bookmarked: Boolean = false
+    )
+
+    val newsItems = remember {
+        mutableStateOf(listOf(
+            NewsItem("New Flyover Construction Begins on NH-4", "The long-awaited flyover at Junction 7 will reduce traffic congestion by 40%. Work begins July 1.", "25 Jun 2026", "Infrastructure", Color(0xFF3B82F6)),
+            NewsItem("Ward 4 Launches Free Health Camp", "Free checkups including sugar, BP and eye tests conducted at Community Hall every Saturday this month.", "24 Jun 2026", "Health", Color(0xFF10B981)),
+            NewsItem("Air Quality Index Improves by 18%", "Ward 4 AQI dropped from 142 to 117 following the ban on open waste burning and EV transit introduction.", "23 Jun 2026", "Environment", Color(0xFF22C55E)),
+            NewsItem("Monsoon Sports Day at Sector Park", "Annual Municipal Sports Day on July 15 at Sector A Public Park. Registration open for all age groups.", "22 Jun 2026", "Events", Color(0xFF8B5CF6)),
+            NewsItem("Water Supply Restored in Block D", "Following emergency pipeline repair, water supply has been fully restored to all 450 households in Block D.", "21 Jun 2026", "Infrastructure", Color(0xFF0EA5E9)),
+            NewsItem("Dengue Prevention Drive Launched", "Health workers will visit all households July 5–15 to check stagnant water and distribute mosquito nets.", "20 Jun 2026", "Health", Color(0xFFEF4444)),
+            NewsItem("Tree Plantation Drive: 500 Trees Planted", "As part of Green Ward 2027, 500 saplings were planted along Central Boulevard.", "19 Jun 2026", "Environment", Color(0xFF16A34A))
+        ))
+    }
+
+    val filtered = if (selectedCategory == "All") newsItems.value else newsItems.value.filter { it.category == selectedCategory }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Newspaper, contentDescription = null, tint = Color(0xFFF59E0B))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("News & Updates", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(categories) { cat ->
+                        val isSelected = cat == selectedCategory
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (isSelected) Color(0xFFF59E0B) else Color(0xFFF1F5F9))
+                                .clickable { selectedCategory = cat }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = cat,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                filtered.forEach { news ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = news.color.copy(alpha = 0.06f)),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, news.color.copy(alpha = 0.25f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(news.color.copy(alpha = 0.15f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(news.category, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = news.color)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(news.headline, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF0F172A), lineHeight = 17.sp)
+                                }
+                                Icon(
+                                    imageVector = Icons.Rounded.Bookmark,
+                                    contentDescription = "Bookmark",
+                                    tint = news.color.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(news.summary, fontSize = 11.sp, color = Color(0xFF475569), lineHeight = 15.sp)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(news.date, fontSize = 10.sp, color = Color(0xFF94A3B8))
+                                TextButton(
+                                    onClick = { Toast.makeText(context, "Opening: ${news.headline}", Toast.LENGTH_SHORT).show() }
+                                ) { Text("Read More →", fontSize = 11.sp, color = news.color, fontWeight = FontWeight.Bold) }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Close", color = Color(0xFF64748B))
+                }
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+// =========================================================================
+// APPOINTMENT BOOKING DIALOG
+// =========================================================================
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun AppointmentDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val officers = remember {
+        listOf(
+            Triple("Shri. R.K. Mehta", "Ward Officer · Sector A", Icons.Rounded.Badge),
+            Triple("Ms. Anita Joshi", "Health Inspector · Sector B", Icons.Rounded.MedicalServices),
+            Triple("Mr. Vivek Nair", "Tax Collector · Revenue Dept", Icons.Rounded.AccountBalance),
+            Triple("Ms. Sonal Desai", "Building Permit Officer", Icons.Rounded.Construction)
+        )
+    }
+    val dates = remember { listOf("Mon 30 Jun", "Tue 1 Jul", "Wed 2 Jul", "Thu 3 Jul", "Fri 4 Jul", "Mon 7 Jul") }
+    val timeSlots = remember { listOf("9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM") }
+
+    var selectedOfficer by remember { mutableStateOf(0) }
+    var selectedDate by remember { mutableStateOf(0) }
+    var selectedTime by remember { mutableStateOf(-1) }
+    var reason by remember { mutableStateOf("") }
+    var confirmed by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = Color(0xFF10B981))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Book Appointment", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (confirmed) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .background(Color(0xFF10B981).copy(alpha = 0.1f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(40.dp))
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Appointment Confirmed!", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF0F172A))
+                        Text("Your token: APT-28741", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = Color(0xFF10B981))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("👤 ${officers[selectedOfficer].first}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("📅 ${dates[selectedDate]}", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text("⏰ ${if (selectedTime >= 0) timeSlots[selectedTime] else "N/A"}", fontSize = 12.sp, color = Color(0xFF64748B))
+                                if (reason.isNotBlank()) Text("📝 $reason", fontSize = 12.sp, color = Color(0xFF64748B))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                        ) { Text("Done", fontWeight = FontWeight.Bold) }
+                    }
+                } else {
+                    Text("Select Officer", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    officers.forEachIndexed { idx, (name, role, icon) ->
+                        val isSelected = idx == selectedOfficer
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) Color(0xFF10B981).copy(alpha = 0.1f) else Color(0xFFF8FAFC))
+                                .border(BorderStroke(1.dp, if (isSelected) Color(0xFF10B981) else Color(0xFFE2E8F0)), RoundedCornerShape(10.dp))
+                                .clickable { selectedOfficer = idx }
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(icon, contentDescription = null, tint = if (isSelected) Color(0xFF10B981) else Color(0xFF64748B), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                                Text(role, fontSize = 10.sp, color = Color(0xFF64748B))
+                            }
+                            if (isSelected) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Select Date", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(dates.size) { idx ->
+                            val isSelected = idx == selectedDate
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) Color(0xFF10B981) else Color(0xFFF1F5F9))
+                                    .clickable { selectedDate = idx }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(dates[idx], fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = if (isSelected) Color.White else Color(0xFF64748B))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Select Time Slot", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        timeSlots.forEachIndexed { idx, slot ->
+                            val isSelected = idx == selectedTime
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) Color(0xFF10B981) else Color(0xFFDCFCE7))
+                                    .clickable { selectedTime = idx }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(slot, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = if (isSelected) Color.White else Color(0xFF0F172A))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = reason,
+                        onValueChange = { reason = it },
+                        label = { Text("Reason for Visit (optional)") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF10B981),
+                            unfocusedBorderColor = Color(0xFFE2E8F0)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            if (selectedTime < 0) {
+                                Toast.makeText(context, "Please select a time slot", Toast.LENGTH_SHORT).show()
+                            } else {
+                                confirmed = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
+                        Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Confirm Appointment", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                        Text("Cancel", color = Color(0xFF64748B))
+                    }
+                }
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+// =========================================================================
+// CITIZEN REWARDS LEADERBOARD DIALOG
+// =========================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LeaderboardDialog(
+    viewModel: CivicViewModel,
+    currentRole: String,
+    onDismiss: () -> Unit
+) {
+    val citizenPoints by viewModel.citizenPoints.collectAsState()
+
+    data class LeaderboardEntry(
+        val rank: Int,
+        val name: String,
+        val ward: String,
+        val points: Int,
+        val isCurrentUser: Boolean = false
+    )
+
+    val leaderEntries = remember(citizenPoints) {
+        listOf(
+            LeaderboardEntry(1, "Meera Nair", "Ward 4, Sector A", 2850),
+            LeaderboardEntry(2, "Arjun Sharma", "Ward 4, Sector B", 2400),
+            LeaderboardEntry(3, "Priya Kulkarni", "Ward 4, Sector C", 2190),
+            LeaderboardEntry(4, "Ravi Pillai", "Ward 4, Sector A", 1780),
+            LeaderboardEntry(5, "Sunita Joshi", "Ward 4, Sector D", 1650),
+            LeaderboardEntry(6, "You", "Ward 4", citizenPoints, isCurrentUser = true),
+            LeaderboardEntry(7, "Kiran Deshpande", "Ward 4, Sector B", 1100),
+            LeaderboardEntry(8, "Asha Singh", "Ward 4, Sector C", 890),
+            LeaderboardEntry(9, "Suresh Patil", "Ward 4, Sector A", 750),
+            LeaderboardEntry(10, "Deepa Mehta", "Ward 4, Sector D", 620)
+        ).sortedByDescending { it.points }.mapIndexed { idx, e -> e.copy(rank = idx + 1) }
+    }
+
+    val medalColors = listOf(Color(0xFFFFD700), Color(0xFFC0C0C0), Color(0xFFCD7F32))
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Leaderboard, contentDescription = null, tint = Color(0xFF8B5CF6))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Civic Leaderboard", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Podium — top 3
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    val top3 = leaderEntries.take(3)
+                    top3.forEachIndexed { idx, entry ->
+                        val podiumHeight = when (idx) { 0 -> 90; 1 -> 70; else -> 55 }.dp
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(containerColor = medalColors[idx].copy(alpha = 0.12f)),
+                            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(podiumHeight)
+                                    .padding(6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(when (idx) { 0 -> "🥇"; 1 -> "🥈"; else -> "🥉" }, fontSize = 20.sp)
+                                Text(entry.name.split(" ").first(), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF0F172A), textAlign = TextAlign.Center)
+                                Text("${entry.points} XP", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, color = medalColors[idx])
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                leaderEntries.forEach { entry ->
+                    val bgColor = when {
+                        entry.isCurrentUser -> Color(0xFF8B5CF6).copy(alpha = 0.08f)
+                        entry.rank <= 3 -> medalColors[entry.rank - 1].copy(alpha = 0.06f)
+                        else -> Color(0xFFF8FAFC)
+                    }
+                    val borderColor = if (entry.isCurrentUser) Color(0xFF8B5CF6) else Color(0xFFE2E8F0)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(bgColor)
+                            .border(BorderStroke(if (entry.isCurrentUser) 2.dp else 1.dp, borderColor), RoundedCornerShape(10.dp))
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when (entry.rank) { 1 -> "🥇"; 2 -> "🥈"; 3 -> "🥉"; else -> "#${entry.rank}" },
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp,
+                            color = if (entry.rank <= 3) medalColors[entry.rank - 1] else Color(0xFF64748B),
+                            modifier = Modifier.width(36.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(entry.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                                if (entry.isCurrentUser) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color(0xFF8B5CF6))
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) { Text("YOU", fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, color = Color.White) }
+                                }
+                            }
+                            Text(entry.ward, fontSize = 10.sp, color = Color(0xFF94A3B8))
+                        }
+                        Text("${entry.points} XP", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF8B5CF6))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF3E8FF)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Info, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Earn XP by filing complaints, voting in polls, and giving 5-star feedback!", fontSize = 11.sp, color = Color(0xFF6D28D9), lineHeight = 15.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Close", color = Color(0xFF64748B))
                 }
