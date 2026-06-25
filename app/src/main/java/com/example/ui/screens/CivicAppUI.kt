@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -2179,120 +2180,7 @@ fun DashboardScreen(
                 }
             }
 
-            // Real-time carbon emission tracking
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-                ) {
-                    Column(modifier = Modifier.padding(if (isElderMode) 20.dp else 16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Rounded.Air,
-                                    contentDescription = "Carbon",
-                                    tint = Color(0xFF10B981),
-                                    modifier = Modifier.size(if (isElderMode) 34.dp else 28.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Live Carbon Footprint Tracking",
-                                    fontSize = h2Size,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF10B981).copy(alpha = 0.12f))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text("SDG 11 Aligned", color = Color(0xFF059669), fontSize = smallSize, fontWeight = FontWeight.Bold)
-                            }
-                        }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFFF8FAFC))
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text("Municipality Output Today", fontSize = smallSize, color = Color(0xFF64748B))
-                                    Text("266.3 Tons CO₂", fontSize = h1Size, fontWeight = FontWeight.Black, color = Color(0xFF0F172A))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Rounded.TrendingDown, contentDescription = "Down", tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("-12.4% vs last month", fontSize = smallSize, color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(64.dp)) {
-                                    CircularProgressIndicator(
-                                        progress = 0.72f,
-                                        color = Color(0xFF10B981),
-                                        trackColor = Color(0xFFE2E8F0),
-                                        strokeWidth = 6.dp,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                    Text("72%", fontSize = pSize, fontWeight = FontWeight.ExtraBold, color = Color(0xFF0F172A))
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("Emission Breakdown:", fontSize = smallSize, color = Color(0xFF64748B), fontWeight = FontWeight.SemiBold)
-
-                        carbonMetrics.forEach { metric ->
-                            Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        val icon = when (metric.source) {
-                                            "Grid Energy" -> Icons.Rounded.Lightbulb
-                                            "Transportation" -> Icons.Rounded.DirectionsCar
-                                            "Waste Management" -> Icons.Rounded.DeleteOutline
-                                            else -> Icons.Rounded.Opacity
-                                        }
-                                        Icon(icon, contentDescription = metric.source, tint = Color(0xFF64748B), modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(metric.source, fontSize = pSize, color = Color(0xFF0F172A))
-                                    }
-                                    Text(
-                                        "${metric.co2Value} Tons",
-                                        fontSize = pSize,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0F172A)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                LinearProgressIndicator(
-                                    progress = (metric.co2Value / metric.totalGoal).toFloat().coerceIn(0f, 1f),
-                                    color = if (metric.co2Value > metric.totalGoal) Color(0xFFEF4444) else Color(0xFF10B981),
-                                    trackColor = Color(0xFFE2E8F0),
-                                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
 
             // Active Grievances Status card
             item {
@@ -3295,6 +3183,10 @@ fun ComplaintsScreen(
     var complaintPhotoAttached by remember { mutableStateOf(false) }
     var complaintLocation by remember { mutableStateOf("Tap pin to tag location") }
 
+    // AI Autofill state
+    var aiDraftText by remember { mutableStateOf("") }
+    var aiDraftLoading by remember { mutableStateOf(false) }
+
     var resolvingId by remember { mutableStateOf<Int?>(null) }
     var resolutionNote by remember { mutableStateOf("") }
     var resolutionPhotoAttached by remember { mutableStateOf(false) }
@@ -3416,6 +3308,9 @@ fun ComplaintsScreen(
                                     Text("Dept: ${complaint.department}", fontSize = 10.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)
                                 }
 
+                                Spacer(modifier = Modifier.height(8.dp))
+                                StatusTimeline(status = complaint.status, rating = complaint.rating)
+
                                 if (complaint.workerName != null && complaint.status == "In Progress") {
                                     Spacer(modifier = Modifier.height(10.dp))
                                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(0.dp)) {
@@ -3524,6 +3419,69 @@ fun ComplaintsScreen(
                 },
                 text = {
                     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // ✨ AI Assistant Autofill Section
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F0FF)),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, Color(0xFF7C3AED).copy(alpha = 0.25f)),
+                            elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier.size(28.dp).clip(CircleShape).background(Color(0xFF7C3AED).copy(alpha = 0.12f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("✨", fontSize = 14.sp)
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("AI Assistant Autofill", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6D28D9))
+                                        Text("Describe the issue casually — AI will structure it.", fontSize = 10.sp, color = Color(0xFF8B5CF6))
+                                    }
+                                }
+                                OutlinedTextField(
+                                    value = aiDraftText,
+                                    onValueChange = { aiDraftText = it },
+                                    label = { Text("Describe the issue (conversational)") },
+                                    placeholder = { Text("e.g. leak near sector b road since last week") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    minLines = 2,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color(0xFF7C3AED),
+                                        unfocusedBorderColor = Color(0xFF7C3AED).copy(alpha = 0.3f)
+                                    )
+                                )
+                                Button(
+                                    onClick = {
+                                        if (aiDraftText.isNotBlank()) {
+                                            aiDraftLoading = true
+                                            viewModel.draftComplaintWithAi(aiDraftText) { draftedTitle, draftedDesc ->
+                                                title = draftedTitle
+                                                description = draftedDesc
+                                                aiDraftLoading = false
+                                                aiDraftText = ""
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                                    enabled = aiDraftText.isNotBlank() && !aiDraftLoading
+                                ) {
+                                    if (aiDraftLoading) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Autofilling...", fontSize = 12.sp, color = Color.White)
+                                    } else {
+                                        Text("✨ Autofill Form", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+
                         OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Issue Title") }, placeholder = { Text("e.g. Pothole on Ring Road") }, modifier = Modifier.fillMaxWidth().testTag("complaint_title_input"), shape = RoundedCornerShape(12.dp))
                         OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, placeholder = { Text("Describe in detail. AI will auto-categorize.") }, modifier = Modifier.fillMaxWidth().testTag("complaint_desc_input"), minLines = 3, shape = RoundedCornerShape(12.dp))
                         Card(
@@ -4152,7 +4110,7 @@ fun ServicesScreen(
 
     // Dialog state controllers
     var showCertificatesDialog by remember { mutableStateOf(false) }
-    var showSosDialog by remember { mutableStateOf(false) }
+    var showEmergencyDirectoryDialog by remember { mutableStateOf(false) }
     var showPaymentsDialog by remember { mutableStateOf(false) }
     var showGisDialog by remember { mutableStateOf(false) }
     var showForumsDialog by remember { mutableStateOf(false) }
@@ -4164,21 +4122,14 @@ fun ServicesScreen(
     var showTendersDialog by remember { mutableStateOf(false) }
     var showWardNoticesDialog by remember { mutableStateOf(false) }
     var showSuggestionsDialog by remember { mutableStateOf(false) }
-    var showDispatchDialog by remember { mutableStateOf(false) }
     var showApprovalsDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
     var showProfileDialog by remember { mutableStateOf(false) }
     var showHealthDialog by remember { mutableStateOf(false) }
-    var showJobsDialog by remember { mutableStateOf(false) }
-    var showNewsDialog by remember { mutableStateOf(false) }
-    var showAppointmentDialog by remember { mutableStateOf(false) }
     var showLeaderboardDialog by remember { mutableStateOf(false) }
 
     val isCitizen = currentRole == "Citizen"
-    val isWardOfficer = currentRole == "Ward Officer"
-    val isDeptOfficer = currentRole == "Department Officer"
-    val isAdmin = currentRole == "Municipality Admin"
-    val isMayor = currentRole == "Mayor / Representative"
+    val isAdmin = currentRole == "Admin" || currentRole == "Municipality Admin"
 
     // Service tiles organized by role
     data class ServiceTile(
@@ -4194,7 +4145,7 @@ fun ServicesScreen(
 
     val citizenServices = if (isCitizen) listOf(
         ServiceTile(Icons.Rounded.Description, "Certificates", "Apply for birth, income & residence certificates", Color(0xFF0EA5E9), Color(0xFFE0F2FE), { showCertificatesDialog = true }),
-        ServiceTile(Icons.Rounded.Warning, "Emergency SOS", "Trigger panic alarm & alert responders", Color(0xFFEF4444), Color(0xFFFEE2E2), { showSosDialog = true }, badge = "LIVE"),
+        ServiceTile(Icons.Rounded.Phone, "Emergency Directory", "Quick call ambulance, police & fire", Color(0xFFEF4444), Color(0xFFFEE2E2), { showEmergencyDirectoryDialog = true }),
         ServiceTile(Icons.Rounded.Payment, "Pay Municipal Bills", "Water, property tax, electricity dues", Color(0xFF10B981), Color(0xFFDCFCE7), { showPaymentsDialog = true }),
         ServiceTile(Icons.Rounded.Map, "City GIS Map", "Projects & infrastructure near you", Color(0xFF8B5CF6), Color(0xFFF3E8FF), { showGisDialog = true }),
         ServiceTile(Icons.Rounded.Forum, "Community Forums", "Connect with ward neighbours", Color(0xFFF59E0B), Color(0xFFFEF3C7), { showForumsDialog = true }),
@@ -4204,25 +4155,10 @@ fun ServicesScreen(
         ServiceTile(Icons.Rounded.EnergySavingsLeaf, "Environment Report", "File pollution or waste complaints", Color(0xFF22C55E), Color(0xFFDCFCE7), { showEnvironmentDialog = true }),
         ServiceTile(Icons.Rounded.Lightbulb, "Suggestions Box", "Submit ideas for city improvement", Color(0xFF7C3AED), Color(0xFFEDE9FE), { showSuggestionsDialog = true }),
         ServiceTile(Icons.Rounded.LocalHospital, "Health Services", "Hospitals, vaccination & ambulance", Color(0xFFEF4444), Color(0xFFFFF1F2), { showHealthDialog = true }),
-        ServiceTile(Icons.Rounded.Work, "Jobs & Employment", "Local jobs, skill programs & MSME", Color(0xFF0284C7), Color(0xFFE0F2FE), { showJobsDialog = true }),
-        ServiceTile(Icons.Rounded.Newspaper, "News & Updates", "Latest municipal news & announcements", Color(0xFFF59E0B), Color(0xFFFEF3C7), { showNewsDialog = true }),
-        ServiceTile(Icons.Rounded.CalendarMonth, "Book Appointment", "Schedule a visit with ward officers", Color(0xFF10B981), Color(0xFFDCFCE7), { showAppointmentDialog = true }),
         ServiceTile(Icons.Rounded.Leaderboard, "Civic Leaderboard", "Top contributors in your ward", Color(0xFF8B5CF6), Color(0xFFF3E8FF), { showLeaderboardDialog = true })
     ) else emptyList()
 
     val officialServices = when {
-        isWardOfficer -> listOf(
-            ServiceTile(Icons.Rounded.Campaign, "Ward Notices", "Publish urgent ward-level notices", Color(0xFF0EA5E9), Color(0xFFE0F2FE), { showWardNoticesDialog = true }),
-            ServiceTile(Icons.Rounded.Timeline, "Ward Analytics", "View complaint trends & heatmaps", Color(0xFF8B5CF6), Color(0xFFF3E8FF), { showGisDialog = true }),
-            ServiceTile(Icons.Rounded.Forum, "Citizen Queries", "Respond to community queries", Color(0xFFF59E0B), Color(0xFFFEF3C7), { showForumsDialog = true }),
-            ServiceTile(Icons.Rounded.ShowChart, "Budget Tracker", "Ward fund allocation & spending", Color(0xFF10B981), Color(0xFFDCFCE7), { showBudgetDialog = true })
-        )
-        isDeptOfficer -> listOf(
-            ServiceTile(Icons.Rounded.DirectionsRun, "Dispatch Management", "Manage SOS & emergency dispatches", Color(0xFFEF4444), Color(0xFFFEE2E2), { showDispatchDialog = true }, badge = "${sharedEmergencyAlerts.count { it.status == "Awaiting Dispatch" }}"),
-            ServiceTile(Icons.Rounded.CheckCircle, "Approve Applications", "Review certificate & permit requests", Color(0xFF10B981), Color(0xFFDCFCE7), { showApprovalsDialog = true }, badge = "${sharedCertificates.count { it.status == "Pending Approval" }}"),
-            ServiceTile(Icons.Rounded.Build, "Project Updates", "Update construction project status", Color(0xFF0284C7), Color(0xFFE0F2FE), { showGisDialog = true }),
-            ServiceTile(Icons.Rounded.ReceiptLong, "Tender Management", "Review & award active tenders", Color(0xFF7C3AED), Color(0xFFEDE9FE), { showTendersDialog = true })
-        )
         isAdmin -> listOf(
             ServiceTile(Icons.Rounded.SupervisedUserCircle, "User Management", "Activate, suspend & manage accounts", Color(0xFF0EA5E9), Color(0xFFE0F2FE), { Toast.makeText(context, "User Management Panel: 4,521 Active Accounts, 18 Pending Verification", Toast.LENGTH_LONG).show() }),
             ServiceTile(Icons.Rounded.AccountBalance, "Budget Allocation", "Approve & allocate departmental funds", Color(0xFF10B981), Color(0xFFDCFCE7), { showBudgetDialog = true }),
@@ -4230,12 +4166,6 @@ fun ServicesScreen(
             ServiceTile(Icons.Rounded.Work, "Departments", "Manage department rosters & assignments", Color(0xFF8B5CF6), Color(0xFFF3E8FF), { Toast.makeText(context, "Departments: Roads (12 staff), Water (8), Sanitation (15), Health (6), Gardens (4)", Toast.LENGTH_LONG).show() }),
             ServiceTile(Icons.Rounded.CheckCircle, "Approve Applications", "Final approval authority for certificates", Color(0xFFEC4899), Color(0xFFFCE7F3), { showApprovalsDialog = true }, badge = "${sharedCertificates.count { it.status == "Pending Approval" }}"),
             ServiceTile(Icons.Rounded.ShowChart, "Analytics Dashboard", "City-wide KPIs & compliance metrics", Color(0xFF0F172A), Color(0xFFF1F5F9), { showGisDialog = true })
-        )
-        isMayor -> listOf(
-            ServiceTile(Icons.Rounded.Campaign, "Mayor's Message", "Publish official messages to citizens", Color(0xFF0EA5E9), Color(0xFFE0F2FE), { Toast.makeText(context, "Message published to 4,521 citizens in Ward 4. Scheduled next broadcast: Friday 9 AM.", Toast.LENGTH_LONG).show() }),
-            ServiceTile(Icons.Rounded.RateReview, "Citizen Feedback", "Review civic suggestions & sentiment", Color(0xFF10B981), Color(0xFFDCFCE7), { showFeedbackDialog = true }, badge = "${sharedSuggestions.size}"),
-            ServiceTile(Icons.Rounded.AccountBalance, "Development Proposals", "Review & approve city development plans", Color(0xFF8B5CF6), Color(0xFFF3E8FF), { showTendersDialog = true }),
-            ServiceTile(Icons.Rounded.ShowChart, "City KPIs", "District-level performance reports", Color(0xFFF59E0B), Color(0xFFFEF3C7), { showBudgetDialog = true })
         )
         else -> emptyList()
     }
@@ -4433,12 +4363,9 @@ fun ServicesScreen(
             onDismiss = { showCertificatesDialog = false }
         )
     }
-    if (showSosDialog) {
-        SosDialog(
-            currentRole = currentRole,
-            sharedEmergencyAlerts = sharedEmergencyAlerts,
-            onUpdateEmergencyAlerts = onUpdateEmergencyAlerts,
-            onDismiss = { showSosDialog = false }
+    if (showEmergencyDirectoryDialog) {
+        EmergencyDirectoryDialog(
+            onDismiss = { showEmergencyDirectoryDialog = false }
         )
     }
     if (showPaymentsDialog) {
@@ -4477,14 +4404,7 @@ fun ServicesScreen(
         TendersDialog(currentRole = currentRole, onDismiss = { showTendersDialog = false })
     }
     if (showWardNoticesDialog) {
-        WardNoticesDialog(currentRole = currentRole, onDismiss = { showWardNoticesDialog = false })
-    }
-    if (showDispatchDialog) {
-        DispatchDialog(
-            sharedEmergencyAlerts = sharedEmergencyAlerts,
-            onUpdateEmergencyAlerts = onUpdateEmergencyAlerts,
-            onDismiss = { showDispatchDialog = false }
-        )
+        WardNoticesDialog(viewModel = viewModel, currentRole = currentRole, onDismiss = { showWardNoticesDialog = false })
     }
     if (showApprovalsDialog) {
         ApprovalsDialog(
@@ -4509,15 +4429,6 @@ fun ServicesScreen(
     }
     if (showHealthDialog) {
         HealthServicesDialog(onDismiss = { showHealthDialog = false })
-    }
-    if (showJobsDialog) {
-        JobsDialog(onDismiss = { showJobsDialog = false })
-    }
-    if (showNewsDialog) {
-        NewsDialog(onDismiss = { showNewsDialog = false })
-    }
-    if (showAppointmentDialog) {
-        AppointmentDialog(onDismiss = { showAppointmentDialog = false })
     }
     if (showLeaderboardDialog) {
         LeaderboardDialog(viewModel = viewModel, currentRole = currentRole, onDismiss = { showLeaderboardDialog = false })
@@ -4613,6 +4524,18 @@ fun CertificatesDialog(
                                 Text("Applicant: ${cert.applicantName}", fontSize = 11.sp, color = Color(0xFF475569))
                                 Text("Details: ${cert.details}", fontSize = 10.sp, color = Color(0xFF64748B), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text("Tracking: ${cert.trackingNo}", fontSize = 10.sp, color = Color(0xFF94A3B8))
+
+                                if (cert.status == "Approved") {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        MockQrCode(modifier = Modifier.size(54.dp))
+                                        DigitalSignatureStamp()
+                                    }
+                                }
                             }
                         }
                     }
@@ -4777,27 +4700,26 @@ fun CertificatesDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SosDialog(
-    currentRole: String,
-    sharedEmergencyAlerts: List<EmergencyAlertItem>,
-    onUpdateEmergencyAlerts: (List<EmergencyAlertItem>) -> Unit,
+fun EmergencyDirectoryDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var selectedEmergencyType by remember { mutableStateOf("Fire") }
-    var selectedUrgency by remember { mutableStateOf("High") }
-    var description by remember { mutableStateOf("") }
-    val emergencyTypes = listOf("Fire", "Ambulance", "Flood", "Earthquake", "Police", "Road Accident")
-    val urgencyLevels = listOf("Low", "Medium", "High", "Critical")
+    val emergencyNumbers = listOf(
+        Triple("Ambulance / Medical", "102 / 108", Icons.Rounded.MedicalServices),
+        Triple("Fire Department", "101", Icons.Rounded.LocalFireDepartment),
+        Triple("Police / Security", "100 / 112", Icons.Rounded.LocalPolice),
+        Triple("Municipal Helpline", "1916", Icons.Rounded.Call),
+        Triple("Disaster Management", "1077", Icons.Rounded.Warning)
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Warning, contentDescription = null, tint = Color(0xFFEF4444))
+                Icon(Icons.Rounded.Phone, contentDescription = null, tint = Color(0xFFEF4444))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Emergency SOS Alert", fontWeight = FontWeight.Bold, color = Color(0xFFEF4444))
+                Text("Emergency Quick-Call Directory", fontWeight = FontWeight.Bold, color = Color(0xFFEF4444))
             }
         },
         text = {
@@ -4806,120 +4728,294 @@ fun SosDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                if (currentRole != "Citizen") {
+                Text(
+                    "Select a service below to place a quick call. This bypasses the mock SOS broadcast network for immediate direct contact.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                
+                emergencyNumbers.forEach { (name, number, icon) ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)),
-                        shape = RoundedCornerShape(12.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable {
+                                Toast.makeText(context, "Calling $name ($number) now...", Toast.LENGTH_LONG).show()
+                            },
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2).copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.2f))
                     ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.Block, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "SOS alerts can only be triggered by Citizens. As $currentRole, you can view incoming alerts via the Dispatch panel.",
-                                fontSize = 12.sp,
-                                color = Color(0xFF92400E)
-                            )
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFFEE2E2)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(icon, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF7F1D1D))
+                                Text("Emergency Number: $number", fontSize = 11.sp, color = Color(0xFFEF4444))
+                            }
+                            Icon(Icons.Rounded.Call, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                        Text("Close", color = Color(0xFF64748B))
-                    }
-                    return@Column
                 }
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Info, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Pressing SOS broadcasts your GPS location to all emergency response units.", fontSize = 12.sp, color = Color(0xFF7F1D1D))
-                    }
-                }
+                
                 Spacer(modifier = Modifier.height(12.dp))
-
-                Text("Emergency Type", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
-                Spacer(modifier = Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(emergencyTypes) { type ->
-                        FilterChip(
-                            selected = selectedEmergencyType == type,
-                            onClick = { selectedEmergencyType = type },
-                            label = { Text(type, fontSize = 11.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFFEF4444),
-                                selectedLabelColor = Color.White
-                            )
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text("Urgency Level", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F172A))
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    urgencyLevels.forEach { level ->
-                        FilterChip(
-                            selected = selectedUrgency == level,
-                            onClick = { selectedUrgency = level },
-                            label = { Text(level, fontSize = 11.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = when (level) {
-                                    "Critical" -> Color(0xFFDC2626)
-                                    "High" -> Color(0xFFEF4444)
-                                    "Medium" -> Color(0xFFF59E0B)
-                                    else -> Color(0xFF22C55E)
-                                },
-                                selectedLabelColor = Color.White
-                            )
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Brief Description (optional)") },
-                    placeholder = { Text("e.g. Fire on 2nd floor, Block B") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = {
-                        val newAlert = EmergencyAlertItem(
-                            id = (100..9999).random(),
-                            title = "$selectedEmergencyType Alert${if (description.isNotBlank()) ": ${description.take(30)}" else ""}",
-                            type = selectedEmergencyType,
-                            urgency = selectedUrgency,
-                            status = "Awaiting Dispatch"
-                        )
-                        onUpdateEmergencyAlerts(sharedEmergencyAlerts + newAlert)
-                        Toast.makeText(context, "🚨 SOS BROADCASTED! Emergency ID: ${newAlert.id}. Responders notified.", Toast.LENGTH_LONG).show()
-                        onDismiss()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
-                ) {
-                    Icon(Icons.Rounded.Warning, contentDescription = null, tint = Color.White)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("TRIGGER EMERGENCY SOS", fontWeight = FontWeight.ExtraBold, color = Color.White)
-                }
-                Spacer(modifier = Modifier.height(8.dp))
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text("Cancel", color = Color(0xFF64748B))
+                    Text("Close", color = Color(0xFF64748B))
                 }
             }
         },
         shape = RoundedCornerShape(20.dp)
     )
+}
+
+@Composable
+fun MockQrCode(modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val size = this.size.width
+        val squareSize = size / 21f
+        val paintColor = Color.Black
+
+        fun drawFinderPattern(offsetX: Float, offsetY: Float) {
+            drawRect(
+                color = paintColor,
+                topLeft = androidx.compose.ui.geometry.Offset(offsetX, offsetY),
+                size = androidx.compose.ui.geometry.Size(squareSize * 7, squareSize * 7)
+            )
+            drawRect(
+                color = Color.White,
+                topLeft = androidx.compose.ui.geometry.Offset(offsetX + squareSize, offsetY + squareSize),
+                size = androidx.compose.ui.geometry.Size(squareSize * 5, squareSize * 5)
+            )
+            drawRect(
+                color = paintColor,
+                topLeft = androidx.compose.ui.geometry.Offset(offsetX + squareSize * 2, offsetY + squareSize * 2),
+                size = androidx.compose.ui.geometry.Size(squareSize * 3, squareSize * 3)
+            )
+        }
+
+        drawFinderPattern(0f, 0f)
+        drawFinderPattern(squareSize * 14, 0f)
+        drawFinderPattern(0f, squareSize * 14)
+
+        val alignOffset = squareSize * 14
+        drawRect(
+            color = paintColor,
+            topLeft = androidx.compose.ui.geometry.Offset(alignOffset, alignOffset),
+            size = androidx.compose.ui.geometry.Size(squareSize * 5, squareSize * 5)
+        )
+        drawRect(
+            color = Color.White,
+            topLeft = androidx.compose.ui.geometry.Offset(alignOffset + squareSize, alignOffset + squareSize),
+            size = androidx.compose.ui.geometry.Size(squareSize * 3, squareSize * 3)
+        )
+        drawRect(
+            color = paintColor,
+            topLeft = androidx.compose.ui.geometry.Offset(alignOffset + squareSize * 2, alignOffset + squareSize * 2),
+            size = androidx.compose.ui.geometry.Size(squareSize, squareSize)
+        )
+
+        val randomGrid = listOf(
+            0x2A3B5C, 0x1F2E3D, 0x5D6C7B, 0x7E8F9A,
+            0x3B4C5D, 0x6E7F8A, 0x1A2B3C, 0x4D5E6F,
+            0x7A8B9C, 0x2D3E4F, 0x5B6C7D, 0x1E2F3A,
+            0x4B5C6D, 0x6A7B8C, 0x3D4E5F, 0x2E3F4A,
+            0x5E6F7A, 0x1C2D3E, 0x4A5B6C, 0x7D8E9F,
+            0x3A4B5C
+        )
+        
+        for (r in 0 until 21) {
+            for (c in 0 until 21) {
+                if ((r < 8 && c < 8) || (r < 8 && c > 12) || (r > 12 && c < 8)) {
+                    continue
+                }
+                if (r > 13 && c > 13) {
+                    continue
+                }
+                val fill = ((randomGrid.getOrElse(r % randomGrid.size) { 0 }) shr (c % 24)) and 1
+                if (fill == 1) {
+                    drawRect(
+                        color = paintColor,
+                        topLeft = androidx.compose.ui.geometry.Offset(c * squareSize, r * squareSize),
+                        size = androidx.compose.ui.geometry.Size(squareSize, squareSize)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DigitalSignatureStamp(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .rotate(-8f)
+            .border(
+                border = BorderStroke(2.dp, Color(0xFFDC2626)),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .background(Color(0xFFFEE2E2).copy(alpha = 0.85f))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(IntrinsicSize.Max)
+        ) {
+            Text(
+                text = "APPROVED",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFFDC2626),
+                letterSpacing = 1.5.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "DIGITALLY SIGNED",
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFDC2626),
+                letterSpacing = 0.5.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Ward 4 Commissioner",
+                fontSize = 7.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFFDC2626)
+            )
+        }
+    }
+}
+
+@Composable
+fun StatusTimeline(
+    status: String,
+    rating: Int,
+    modifier: Modifier = Modifier
+) {
+    val steps = listOf("Submitted", "Assigned", "In Progress", "Resolved", "Feedback")
+    
+    val activeIndex = when {
+        rating > 0 -> 4
+        status == "Resolved" || status == "Closed" -> 3
+        status == "In Progress" || status == "Under Review" -> 2
+        status == "Assigned" -> 1
+        status == "Submitted" -> 0
+        else -> 0
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                for (i in 0 until steps.size - 1) {
+                    val lineColor = if (i < activeIndex) Color(0xFF34C759) else Color(0xFFE5E5EA)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(2.dp)
+                            .background(lineColor)
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                steps.forEachIndexed { index, _ ->
+                    val isCompleted = index < activeIndex
+                    val isActive = index == activeIndex
+
+                    val circleColor = when {
+                        isCompleted -> Color(0xFF34C759)
+                        isActive -> Color(0xFF007AFF)
+                        else -> Color(0xFFE5E5EA)
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(circleColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isCompleted) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = (index + 1).toString(),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isActive) Color.White else Color(0xFF8E8E93)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            steps.forEachIndexed { index, step ->
+                val isActive = index == activeIndex
+                val isCompleted = index < activeIndex
+                val textColor = when {
+                    isActive -> Color(0xFF007AFF)
+                    isCompleted -> Color(0xFF34C759)
+                    else -> Color(0xFF8E8E93)
+                }
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = step,
+                        fontSize = 8.sp,
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                        color = textColor,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -5888,16 +5984,26 @@ fun TendersDialog(currentRole: String, onDismiss: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WardNoticesDialog(currentRole: String, onDismiss: () -> Unit) {
+fun WardNoticesDialog(viewModel: CivicViewModel, currentRole: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val notices by viewModel.notices.collectAsState()
     var noticeTitle by remember { mutableStateOf("") }
     var noticeContent by remember { mutableStateOf("") }
     var selectedNoticeType by remember { mutableStateOf("General") }
-    var publishedNotices by remember { mutableStateOf(listOf(
-        Pair("Water supply maintenance scheduled for 22 June (6 AM–2 PM)", "Emergency"),
-        Pair("Community cleanup drive — 28 June 7:00 AM at Block C park", "General")
-    )) }
+    var selectedTargetSector by remember { mutableStateOf("All") }
     val noticeTypes = listOf("General", "Emergency", "Tender", "Event")
+    val sectors = listOf("All", "Sector A", "Sector B", "Sector C", "Sector D")
+
+    // Citizen filter state
+    var citizenFilter by remember { mutableStateOf("All") }
+
+    val isAdminRole = currentRole == "Admin" || currentRole == "Municipality Admin" || currentRole == "Ward Officer"
+
+    val displayedNotices = if (currentRole == "Citizen") {
+        notices.filter { it.targetLocation == "All" || it.targetLocation == citizenFilter || citizenFilter == "All" }
+    } else {
+        notices
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -5915,54 +6021,91 @@ fun WardNoticesDialog(currentRole: String, onDismiss: () -> Unit) {
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
+                // Citizen: filter chips
+                if (currentRole == "Citizen") {
+                    Text("Filter by Sector", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(sectors) { sector ->
+                            FilterChip(
+                                selected = citizenFilter == sector,
+                                onClick = { citizenFilter = sector },
+                                label = { Text(sector, fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF0EA5E9),
+                                    selectedLabelColor = Color.White
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
                 Text("Published Notices", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color(0xFF0F172A))
                 Spacer(modifier = Modifier.height(8.dp))
-                publishedNotices.forEach { (notice, type) ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = when (type) {
-                                "Emergency" -> Color(0xFFFEE2E2)
-                                "Tender" -> Color(0xFFEFF6FF)
-                                "Event" -> Color(0xFFF0FDF4)
-                                else -> Color(0xFFFFF7ED)
-                            }
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+
+                if (displayedNotices.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        Text("No notices for this sector.", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                    }
+                } else {
+                    displayedNotices.forEach { notice ->
+                        val type = notice.type
+                        val sectorTag = if (notice.targetLocation != null && notice.targetLocation != "All") " — ${notice.targetLocation}" else ""
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = when (type) {
+                                    "Emergency" -> Color(0xFFFEE2E2)
+                                    "Tender" -> Color(0xFFEFF6FF)
+                                    "Event" -> Color(0xFFF0FDF4)
+                                    else -> Color(0xFFFFF7ED)
+                                }
+                            ),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(
-                                        when (type) {
-                                            "Emergency" -> Color(0xFFEF4444)
-                                            "Tender" -> Color(0xFF2563EB)
-                                            "Event" -> Color(0xFF22C55E)
-                                            else -> Color(0xFFF59E0B)
-                                        }
-                                    )
-                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(type, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            when (type) {
+                                                "Emergency" -> Color(0xFFEF4444)
+                                                "Tender" -> Color(0xFF2563EB)
+                                                "Event" -> Color(0xFF22C55E)
+                                                else -> Color(0xFFF59E0B)
+                                            }
+                                        )
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    Text(type, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(notice.title, fontSize = 12.sp, color = Color(0xFF0F172A), fontWeight = FontWeight.SemiBold)
+                                    if (sectorTag.isNotBlank()) {
+                                        Text(sectorTag, fontSize = 9.sp, color = Color(0xFF0EA5E9), fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(notice, fontSize = 12.sp, color = Color(0xFF0F172A), modifier = Modifier.weight(1f))
                         }
                     }
                 }
 
-                if (currentRole == "Ward Officer" || currentRole == "Municipality Admin") {
+                if (isAdminRole) {
                     Spacer(modifier = Modifier.height(14.dp))
                     HorizontalDivider(color = Color(0xFFE2E8F0))
                     Spacer(modifier = Modifier.height(10.dp))
                     Text("Publish New Notice", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        noticeTypes.forEach { type ->
+
+                    Text("Notice Type", fontSize = 10.sp, color = Color(0xFF64748B))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(noticeTypes) { type ->
                             FilterChip(
                                 selected = selectedNoticeType == type,
                                 onClick = { selectedNoticeType = type },
@@ -5971,6 +6114,24 @@ fun WardNoticesDialog(currentRole: String, onDismiss: () -> Unit) {
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    Text("Target Sector", fontSize = 10.sp, color = Color(0xFF64748B))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(sectors) { sector ->
+                            FilterChip(
+                                selected = selectedTargetSector == sector,
+                                onClick = { selectedTargetSector = sector },
+                                label = { Text(sector, fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF0EA5E9),
+                                    selectedLabelColor = Color.White
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = noticeTitle,
                         onValueChange = { noticeTitle = it },
@@ -5993,10 +6154,15 @@ fun WardNoticesDialog(currentRole: String, onDismiss: () -> Unit) {
                             if (noticeTitle.isBlank()) {
                                 Toast.makeText(context, "Enter notice title", Toast.LENGTH_SHORT).show()
                             } else {
-                                publishedNotices = listOf(Pair(noticeTitle.trim(), selectedNoticeType)) + publishedNotices
+                                viewModel.publishNotice(
+                                    title = noticeTitle.trim(),
+                                    content = noticeContent.trim().ifBlank { noticeTitle.trim() },
+                                    type = selectedNoticeType,
+                                    targetLocation = selectedTargetSector
+                                )
                                 noticeTitle = ""
                                 noticeContent = ""
-                                Toast.makeText(context, "📢 Notice published to Ward 4 citizens!", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "📢 Notice published to $selectedTargetSector!", Toast.LENGTH_LONG).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -6016,117 +6182,7 @@ fun WardNoticesDialog(currentRole: String, onDismiss: () -> Unit) {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun DispatchDialog(
-    sharedEmergencyAlerts: List<EmergencyAlertItem>,
-    onUpdateEmergencyAlerts: (List<EmergencyAlertItem>) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {},
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.DeliveryDining, contentDescription = null, tint = Color(0xFFEF4444))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Emergency Dispatch Management", fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                val pending = sharedEmergencyAlerts.filter { it.status == "Awaiting Dispatch" }
-                val dispatched = sharedEmergencyAlerts.filter { it.status == "Units Dispatched!" }
-
-                if (pending.isNotEmpty()) {
-                    Text("⚠️ Awaiting Dispatch (${pending.size})", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color(0xFFEF4444))
-                    Spacer(modifier = Modifier.height(6.dp))
-                    pending.forEach { alert ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2)),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.4f))
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(alert.title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF7F1D1D), modifier = Modifier.weight(1f))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Color(0xFFDC2626))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(alert.urgency, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    }
-                                }
-                                Text("Type: ${alert.type} | ID: ${alert.id}", fontSize = 10.sp, color = Color(0xFF94A3B8))
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = {
-                                        val updated = sharedEmergencyAlerts.map {
-                                            if (it.id == alert.id) it.copy(status = "Units Dispatched!") else it
-                                        }
-                                        onUpdateEmergencyAlerts(updated)
-                                        Toast.makeText(context, "🚑 Units dispatched for Alert #${alert.id}!", Toast.LENGTH_LONG).show()
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
-                                ) {
-                                    Text("Dispatch Emergency Units", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (dispatched.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("✅ Units Dispatched (${dispatched.size})", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color(0xFF22C55E))
-                    Spacer(modifier = Modifier.height(6.dp))
-                    dispatched.forEach { alert ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFDCFCE7)),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(alert.title, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0F172A))
-                                    Text("${alert.type} | Dispatched", fontSize = 10.sp, color = Color(0xFF22C55E))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (sharedEmergencyAlerts.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("No active emergency alerts. All clear! ✅", fontSize = 14.sp, color = Color(0xFF64748B), textAlign = TextAlign.Center)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text("Close", color = Color(0xFF64748B))
-                }
-            }
-        },
-        shape = RoundedCornerShape(20.dp)
-    )
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -6212,14 +6268,27 @@ fun ApprovalsDialog(
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFDCFCE7)),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color(0xFF22C55E).copy(alpha = 0.3f))
                         ) {
-                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Rounded.Verified, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(cert.type, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0F172A))
-                                    Text("${cert.applicantName} — Approved ✓", fontSize = 11.sp, color = Color(0xFF22C55E))
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Rounded.Verified, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(cert.type, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0F172A))
+                                        Text("${cert.applicantName} — Approved ✓", fontSize = 11.sp, color = Color(0xFF22C55E))
+                                        Text("Tracking: ${cert.trackingNo}", fontSize = 9.sp, color = Color(0xFF94A3B8))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    MockQrCode(modifier = Modifier.size(52.dp))
+                                    DigitalSignatureStamp()
                                 }
                             }
                         }

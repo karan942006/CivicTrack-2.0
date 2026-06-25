@@ -425,4 +425,43 @@ class CivicRepository(context: Context) {
             noticeDao.insertNotice(notice)
         }
     }
+
+    suspend fun draftComplaint(conversationalText: String): Pair<String, String> {
+        return withContext(Dispatchers.IO) {
+            val key = getApiKey()
+            if (key.isNotBlank()) {
+                val systemPrompt = "You are a municipal assistant. The user provides a casual or conversational description of a civic issue. You must draft a professional structured city complaint. Extract: 1. A short, concise title (max 5-6 words). 2. A professional, detailed description describing the issue clearly. Respond strictly in JSON format as: {\"title\": \"...\", \"description\": \"...\"}"
+                try {
+                    val aiResponse = callGemini(conversationalText, systemPrompt)
+                    val cleanJson = aiResponse.trim()
+                        .removePrefix("```json")
+                        .removeSuffix("```")
+                        .trim()
+                    val json = JSONObject(cleanJson)
+                    val title = json.optString("title", "")
+                    val description = json.optString("description", "")
+                    if (title.isNotBlank() && description.isNotBlank()) {
+                        return@withContext Pair(title, description)
+                    }
+                } catch (e: Exception) {
+                    // Fallback below
+                }
+            }
+            return@withContext localDraftFallback(conversationalText)
+        }
+    }
+
+    private fun localDraftFallback(text: String): Pair<String, String> {
+        val cleanText = text.trim()
+        val title = when {
+            cleanText.contains("water", ignoreCase = true) || cleanText.contains("leak", ignoreCase = true) -> "Water Leakage Issue"
+            cleanText.contains("pothole", ignoreCase = true) || cleanText.contains("road", ignoreCase = true) -> "Road Maintenance Request"
+            cleanText.contains("garbage", ignoreCase = true) || cleanText.contains("trash", ignoreCase = true) -> "Garbage Accumulation Complaint"
+            cleanText.contains("light", ignoreCase = true) || cleanText.contains("dark", ignoreCase = true) -> "Streetlight Malfunction"
+            cleanText.contains("drain", ignoreCase = true) || cleanText.contains("sewage", ignoreCase = true) -> "Drainage Overflow Issue"
+            else -> "Civic Grievance Report"
+        }
+        val description = "Reported issue: \"$cleanText\". The municipal department is requested to inspect and resolve this civic issue at the earliest."
+        return Pair(title, description)
+    }
 }

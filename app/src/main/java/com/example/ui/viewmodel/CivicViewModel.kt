@@ -334,28 +334,29 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun publishNotice(title: String, content: String, type: String) {
+    fun publishNotice(title: String, content: String, type: String, targetLocation: String? = "All") {
         viewModelScope.launch {
             repository.insertNotice(Notice(
                 title = title,
                 content = content,
                 type = type,
                 date = "Today",
-                bookmarked = false
+                bookmarked = false,
+                targetLocation = targetLocation
             ))
             
             // Trigger emergency broadcast alerts
             if (type == "Emergency" || type == "Alert") {
                 triggerRealTimeAlert(CivicAlert(
                     title = "🚨 EMERGENCY BROADCAST: Municipal Corp",
-                    message = "$title: $content",
+                    message = "[$targetLocation] $title: $content",
                     urgency = "Critical",
                     isEmergency = true
                 ))
             } else {
                 triggerRealTimeAlert(CivicAlert(
                     title = "📢 New Municipal Announcement",
-                    message = "'$title' has been officially broadcasted to Ward 4 dashboards.",
+                    message = "'$title' has been officially broadcasted to Ward 4 dashboards ($targetLocation).",
                     urgency = "Low",
                     isEmergency = false
                 ))
@@ -523,6 +524,14 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
                 urgency = "Low",
                 isEmergency = false
             ))
+        }
+    }
+
+    fun draftComplaintWithAi(conversationalText: String, onCompleted: (String, String) -> Unit) {
+        if (conversationalText.isBlank()) return
+        viewModelScope.launch {
+            val drafted = repository.draftComplaint(conversationalText)
+            onCompleted(drafted.first, drafted.second)
         }
     }
 }

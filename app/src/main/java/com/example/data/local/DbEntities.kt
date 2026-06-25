@@ -36,7 +36,8 @@ data class Notice(
     val type: String, // Announcement, Tender, Emergency, Alert
     val date: String,
     val summary: String? = null,
-    val bookmarked: Boolean = false
+    val bookmarked: Boolean = false,
+    val targetLocation: String? = "All"
 )
 
 @Entity(tableName = "projects")
