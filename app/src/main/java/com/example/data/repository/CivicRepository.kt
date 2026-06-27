@@ -16,11 +16,7 @@ import org.json.JSONObject
 
 class CivicRepository(context: Context) {
 
-    private val db = Room.databaseBuilder(
-        context.applicationContext,
-        AppDatabase::class.java, "civictrack_database"
-    ).fallbackToDestructiveMigration()
-        .build()
+    private val db = AppDatabase.getInstance(context)
 
     private val complaintDao = db.complaintDao()
     private val noticeDao = db.noticeDao()
@@ -361,6 +357,12 @@ class CivicRepository(context: Context) {
         }
     }
 
+    suspend fun insertPoll(poll: Poll) {
+        withContext(Dispatchers.IO) {
+            pollDao.insertPolls(listOf(poll))
+        }
+    }
+
     suspend fun prepopulateDataIfEmpty() {
         withContext(Dispatchers.IO) {
             // Ensure API keys and Firebase config are populated from user's parameters on startup
@@ -402,9 +404,153 @@ class CivicRepository(context: Context) {
                 appConfigDao.setConfig(AppConfig("firebase_json", fbConfig))
             }
 
+            // Pre-populate Carbon Metrics
+            val existingMetrics = carbonMetrics.firstOrNull()
+            if (existingMetrics.isNullOrEmpty()) {
+                val metricsList = listOf(
+                    CarbonMetric("Grid Energy", 340.5, -4.2, 500.0),
+                    CarbonMetric("Transport", 280.2, -1.5, 400.0),
+                    CarbonMetric("Waste", 150.8, 2.8, 200.0),
+                    CarbonMetric("Water", 95.3, -0.8, 150.0)
+                )
+                carbonMetricDao.insertMetrics(metricsList)
+            }
+
+            // Pre-populate Projects
+            val existingProjects = projects.firstOrNull()
+            if (existingProjects.isNullOrEmpty()) {
+                val projectsList = listOf(
+                    Project(
+                        name = "Central Park Solar Canopy",
+                        budget = "₹45 Lakhs",
+                        contractor = "SunPower India Ltd.",
+                        progress = 75,
+                        startDate = "Jan 2026",
+                        endDate = "Aug 2026",
+                        co2Saved = "120.4 Tons/yr",
+                        description = "Installing a smart solar canopy in Central Park to generate clean grid power and reduce energy reliance of surrounding municipal blocks."
+                    ),
+                    Project(
+                        name = "Central Boulevard Electric Shuttle Grid",
+                        budget = "₹1.2 Crores",
+                        contractor = "Tata Motors Corp",
+                        progress = 90,
+                        startDate = "Oct 2025",
+                        endDate = "May 2026",
+                        co2Saved = "345.8 Tons/yr",
+                        description = "Deploying 15 zero-emission mini EV shuttles along Sector 4's primary commercial corridors."
+                    ),
+                    Project(
+                        name = "Ward 4 Automatic Composting Plant",
+                        budget = "₹35 Lakhs",
+                        contractor = "CleanCity Eco-Solutions",
+                        progress = 45,
+                        startDate = "Mar 2026",
+                        endDate = "Dec 2026",
+                        co2Saved = "85.2 Tons/yr",
+                        description = "Setting up a decentralized organic composting system to recycle wet garbage locally."
+                    )
+                )
+                projectDao.insertProjects(projectsList)
+            }
+
+            // Pre-populate Notices
+            val existingNotices = notices.firstOrNull()
+            if (existingNotices.isNullOrEmpty()) {
+                val noticesList = listOf(
+                    Notice(
+                        title = "Emergency Water Pipeline Maintenance",
+                        content = "Due to a main line rupture near Sector C, water supply will be suspended in Sector C and D blocks on Monday morning from 8 AM to 2 PM. Please conserve water accordingly.",
+                        type = "Emergency",
+                        date = "Today",
+                        targetLocation = "Sector C"
+                    ),
+                    Notice(
+                        title = "Smart Solar Rooftop Subsidy Application Open",
+                        content = "Applications are invited from individual homeowners in Ward 4 for the 40% government solar rooftop subsidy scheme under SDG 11. Apply online or at Sector A Citizen kiosk.",
+                        type = "Announcement",
+                        date = "Yesterday",
+                        targetLocation = "All"
+                    ),
+                    Notice(
+                        title = "Commercial Noise Decibel Limitations",
+                        content = "By order of the Ward Officer, all commercial shops in Block C must restrict overnight decibel levels to under 45 dB after 10 PM. Non-compliance alerts will trigger auto-fines.",
+                        type = "Alert",
+                        date = "2 days ago",
+                        targetLocation = "Sector C"
+                    )
+                )
+                noticesList.forEach { noticeDao.insertNotice(it) }
+            }
+
+            // Pre-populate Polls
             val existingPolls = polls.firstOrNull()
-            // We do not pre-populate any mock data to ensure the app is blank unless and until added.
-            // All tables are empty at startup.
+            if (existingPolls.isNullOrEmpty()) {
+                val pollsList = listOf(
+                    Poll(
+                        question = "Should we convert the Sector B open landfill into a public botanical park?",
+                        optionA = "Yes, create a green park",
+                        optionB = "No, use it for EV charging depot",
+                        votesA = 342,
+                        votesB = 189,
+                        userVote = null
+                    ),
+                    Poll(
+                        question = "Allocate 25% of Ward 4 budget to smart trash can sensors?",
+                        optionA = "Yes, optimize garbage collection",
+                        optionB = "No, spend on road pothole repairs",
+                        votesA = 120,
+                        votesB = 245,
+                        userVote = null
+                    )
+                )
+                pollDao.insertPolls(pollsList)
+            }
+
+            // Pre-populate Complaints
+            val existingComplaints = complaints.firstOrNull()
+            if (existingComplaints.isNullOrEmpty()) {
+                complaintDao.insertComplaint(Complaint(
+                    title = "Deep Pothole at Main Junction",
+                    description = "There is a massive pothole right at the entry of Sector A road. It is causing major traffic delays and is very dangerous for two-wheelers at night.",
+                    category = "Roads",
+                    status = "Submitted",
+                    urgency = "High",
+                    department = "Roads & Highways Department",
+                    location = "Ward 4, Smart Sector A",
+                    imageBase64 = "[Photo: Roads_issue_photo]"
+                ))
+                complaintDao.insertComplaint(Complaint(
+                    title = "Streetlights broken near school zone",
+                    description = "Three streetlights are completely non-functional along the school lane, creating a safety hazard for students staying back for evening classes.",
+                    category = "Electricity",
+                    status = "In Progress",
+                    urgency = "Medium",
+                    department = "Municipal Power Utility",
+                    location = "Ward 4, Sector B School Lane",
+                    imageBase64 = "[Photo: Electricity_issue_photo]",
+                    workerName = "Rohan Sharma",
+                    workerInfo = "Senior Electrical Technician, Ward 4"
+                ))
+                complaintDao.insertComplaint(Complaint(
+                    title = "Overflowing garbage dump in market",
+                    description = "The garbage collection bin in Sector C main market has been overflowing for the last 3 days. Foul smell is spreading and blocking pedestrian pathways.",
+                    category = "Garbage",
+                    status = "Resolved",
+                    urgency = "High",
+                    department = "Sanitation & Waste Management",
+                    location = "Ward 4, Sector C Market",
+                    imageBase64 = "[Photo: Garbage_issue_photo]",
+                    workerName = "Amit Kumar",
+                    workerInfo = "Sanitation Crew lead",
+                    resolutionNote = "Cleared the bin entirely and sanitized the surrounding pavement area.",
+                    resolvedImageBase64 = "[Photo: Garbage_resolution_photo]",
+                    governmentPayout = 1200.0,
+                    payoutStatus = "Paid",
+                    rating = 5,
+                    ratingComment = "Excellent work! Cleared very quickly and cleaned the road too."
+                ))
+            }
         }
     }
 
@@ -423,6 +569,12 @@ class CivicRepository(context: Context) {
     suspend fun insertNotice(notice: Notice) {
         withContext(Dispatchers.IO) {
             noticeDao.insertNotice(notice)
+        }
+    }
+
+    suspend fun updateNotice(notice: Notice) {
+        withContext(Dispatchers.IO) {
+            noticeDao.updateNotice(notice)
         }
     }
 

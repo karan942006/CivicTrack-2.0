@@ -73,6 +73,14 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
     private val _realTimeAlert = MutableStateFlow<CivicAlert?>(null)
     val realTimeAlert: StateFlow<CivicAlert?> = _realTimeAlert.asStateFlow()
 
+    // Profile Names State
+    private val _profileNames = MutableStateFlow(mapOf(
+        "citizen" to "Priya Sharma",
+        "worker" to "Rajan Patel",
+        "admin" to "Dr. Meena Kulkarni"
+    ))
+    val profileNames: StateFlow<Map<String, String>> = _profileNames.asStateFlow()
+
     // Dynamic Citizen Points
     private val _citizenPoints = MutableStateFlow(0)
     val citizenPoints: StateFlow<Int> = _citizenPoints.asStateFlow()
@@ -158,6 +166,16 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
             if (!wAchsStr.isNullOrBlank()) {
                 _earnedWorkerAchievements.value = wAchsStr.split(",").toSet()
             }
+
+            // Load profile names
+            val cName = repository.getConfig("citizen_name") ?: "Priya Sharma"
+            val wName = repository.getConfig("worker_name") ?: "Rajan Patel"
+            val aName = repository.getConfig("admin_name") ?: "Dr. Meena Kulkarni"
+            _profileNames.value = mapOf(
+                "citizen" to cName,
+                "worker" to wName,
+                "admin" to aName
+            )
         }
     }
 
@@ -329,6 +347,26 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
                 title = "⚡ Live Project Telemetry Update",
                 message = "Development Project '${project.name}' progress updated to ${project.progress}%. Target CO2 mitigation: ${project.co2Saved}.",
                 urgency = "Medium",
+                isEmergency = false
+            ))
+        }
+    }
+
+    fun publishPoll(question: String, optionA: String, optionB: String) {
+        viewModelScope.launch {
+            repository.insertPoll(Poll(
+                question = question,
+                optionA = optionA,
+                optionB = optionB,
+                votesA = 0,
+                votesB = 0,
+                userVote = null
+            ))
+            
+            triggerRealTimeAlert(CivicAlert(
+                title = "🗳️ New Municipal Poll Active",
+                message = "A new planning poll has been published: '$question'. Cast your vote now!",
+                urgency = "Low",
                 isEmergency = false
             ))
         }
@@ -532,6 +570,20 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val drafted = repository.draftComplaint(conversationalText)
             onCompleted(drafted.first, drafted.second)
+        }
+    }
+
+    fun toggleNoticeBookmark(notice: Notice) {
+        viewModelScope.launch {
+            repository.updateNotice(notice.copy(bookmarked = !notice.bookmarked))
+        }
+    }
+
+    fun saveProfileName(role: String, name: String) {
+        viewModelScope.launch {
+            val key = role.lowercase()
+            repository.saveConfig(key + "_name", name)
+            _profileNames.update { it + (key to name) }
         }
     }
 }
