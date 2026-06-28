@@ -1,7 +1,7 @@
 # 🌍 CivicTrack
 ### **Next-Gen AI-Powered Smart Municipality & Citizen Engagement Platform**
 
-CivicTrack 2.0 is a production-grade, native Android application designed to bridge the gap between citizens, municipal field workers, and ward administration. Engineered with a local-first architecture, local database caching, offline capabilities, real-time AI assistance, and rich gamification loops, CivicTrack 2.0 digitizes public governance into a modern, accessible interface.
+CivicTrack is a production-grade, native Android application designed to bridge the gap between citizens, municipal field workers, and ward administration. Engineered with a local-first architecture, local database caching, offline capabilities, real-time AI assistance, and rich gamification loops, CivicTrack 2.0 digitizes public governance into a modern, accessible interface.
 
 ---
 
